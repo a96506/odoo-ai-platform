@@ -3,6 +3,7 @@ Odoo XML-RPC client for programmatic access to all Odoo models.
 Handles authentication, CRUD operations, and method execution.
 """
 
+import ssl
 import xmlrpc.client
 from typing import Any
 from contextlib import contextmanager
@@ -13,6 +14,13 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from app.config import get_settings
 
 logger = structlog.get_logger()
+
+
+def _make_ssl_context() -> ssl.SSLContext:
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
 
 
 class OdooClient:
@@ -31,12 +39,15 @@ class OdooClient:
         self._uid: int | None = None
         self._common: xmlrpc.client.ServerProxy | None = None
         self._object: xmlrpc.client.ServerProxy | None = None
+        self._ssl_context = _make_ssl_context() if self.url.startswith("https") else None
 
     @property
     def common(self) -> xmlrpc.client.ServerProxy:
         if self._common is None:
             self._common = xmlrpc.client.ServerProxy(
-                f"{self.url}/xmlrpc/2/common", allow_none=True
+                f"{self.url}/xmlrpc/2/common",
+                allow_none=True,
+                context=self._ssl_context,
             )
         return self._common
 
@@ -44,7 +55,9 @@ class OdooClient:
     def object(self) -> xmlrpc.client.ServerProxy:
         if self._object is None:
             self._object = xmlrpc.client.ServerProxy(
-                f"{self.url}/xmlrpc/2/object", allow_none=True
+                f"{self.url}/xmlrpc/2/object",
+                allow_none=True,
+                context=self._ssl_context,
             )
         return self._object
 
