@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="default_ai_config" model="ai.config">
+            <field name="name">AI Configuration</field>
+            <field name="ai_service_url">http://ai-service:8000</field>
+            <field name="webhook_secret">change-me-webhook-secret</field>
+            <field name="enabled">True</field>
+            <field name="log_webhooks">True</field>
+            <field name="enable_accounting">True</field>
+            <field name="enable_crm">True</field>
+            <field name="enable_sales">True</field>
+            <field name="enable_purchase">True</field>
+            <field name="enable_inventory">True</field>
+            <field name="enable_hr">True</field>
+            <field name="enable_project">True</field>
+            <field name="enable_helpdesk">True</field>
+            <field name="enable_manufacturing">True</field>
+            <field name="enable_marketing">True</field>
+        </record>
+    </data>
+</odoo>
