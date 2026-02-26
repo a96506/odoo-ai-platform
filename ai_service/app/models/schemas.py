@@ -85,3 +85,94 @@ class HealthResponse(BaseModel):
     redis_connected: bool
     db_connected: bool
     version: str = "1.0.0"
+
+
+# ---------------------------------------------------------------------------
+# Month-End Closing (1.1)
+# ---------------------------------------------------------------------------
+
+class ClosingStartRequest(BaseModel):
+    period: str = Field(..., pattern=r"^\d{4}-\d{2}$", description="YYYY-MM period")
+    started_by: str = "admin"
+
+
+class ClosingStepResponse(BaseModel):
+    step_name: str
+    step_order: int
+    status: str
+    items_found: int = 0
+    items_resolved: int = 0
+    auto_check_result: dict[str, Any] | None = None
+    notes: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class ClosingStatusResponse(BaseModel):
+    closing_id: int
+    period: str
+    status: str
+    overall_progress_pct: float = 0.0
+    steps: list[ClosingStepResponse] = []
+    issues: list[dict[str, Any]] = []
+    summary: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class ClosingStepCompleteRequest(BaseModel):
+    completed_by: str = "admin"
+    notes: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Bank Reconciliation (1.3)
+# ---------------------------------------------------------------------------
+
+class ReconciliationStartRequest(BaseModel):
+    journal_id: int
+    user_id: str = "admin"
+
+
+class ReconciliationStartResponse(BaseModel):
+    session_id: int
+    total_lines: int = 0
+    auto_matchable: int = 0
+    needs_review: int = 0
+
+
+class MatchSuggestion(BaseModel):
+    bank_line_id: int
+    bank_ref: str = ""
+    bank_amount: float = 0.0
+    matched_entry_id: int | None = None
+    matched_entry_ref: str = ""
+    matched_amount: float = 0.0
+    confidence: float = 0.0
+    match_type: str = "none"
+    reasoning: str = ""
+
+
+class ReconciliationSuggestionsResponse(BaseModel):
+    session_id: int
+    suggestions: list[MatchSuggestion] = []
+    total: int = 0
+    page: int = 1
+    limit: int = 20
+
+
+class ReconciliationMatchRequest(BaseModel):
+    bank_line_id: int
+    entry_id: int
+
+
+class ReconciliationMatchResponse(BaseModel):
+    matched: bool = True
+    session_progress: dict[str, int] = Field(default_factory=dict)
+
+
+class ReconciliationSkipRequest(BaseModel):
+    bank_line_id: int
+    reason: str = ""

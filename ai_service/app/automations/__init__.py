@@ -34,6 +34,7 @@ def init_automations():
     from app.automations.helpdesk import HelpdeskAutomation
     from app.automations.manufacturing import ManufacturingAutomation
     from app.automations.marketing import MarketingAutomation
+    from app.automations.month_end import MonthEndClosingAutomation
 
     handlers = [
         AccountingAutomation(),
@@ -46,6 +47,7 @@ def init_automations():
         HelpdeskAutomation(),
         ManufacturingAutomation(),
         MarketingAutomation(),
+        MonthEndClosingAutomation(),
     ]
     for handler in handlers:
         register_automation(handler)

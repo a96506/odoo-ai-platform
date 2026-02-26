@@ -3,7 +3,7 @@ Base automation class that all module-specific automations inherit from.
 Provides common patterns: Odoo data fetching, Claude analysis, confidence-gated execution.
 """
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Any
 
 import structlog
@@ -80,6 +80,26 @@ class BaseAutomation(ABC):
                 record_id=record_id,
                 reasoning=f"Error: {exc}",
             )
+
+    def handle_batch(
+        self,
+        records: list[dict[str, Any]],
+        action: str = "process",
+    ) -> list[AutomationResult]:
+        """
+        Process multiple records in a single pass (e.g. batch IDP, dedup scan).
+        Override in subclasses for optimised batch logic.
+        Default: processes each record individually.
+        """
+        results = []
+        for record in records:
+            result = self.run_action(
+                action,
+                record.get("model", ""),
+                record.get("record_id", 0),
+            )
+            results.append(result)
+        return results
 
     def run_action(
         self, action: str, model: str, record_id: int
@@ -166,3 +186,30 @@ class BaseAutomation(ABC):
     def create_record(self, model: str, values: dict) -> int:
         """Create a new Odoo record."""
         return self.odoo.create(model, values)
+
+    def notify(
+        self,
+        channel: str,
+        recipient: str,
+        subject: str,
+        body: str,
+        **kwargs: Any,
+    ) -> bool:
+        """
+        Send a notification via the notification service.
+        Channels: "email", "whatsapp", "slack", "in_app".
+        Returns True if sent successfully, False otherwise.
+        """
+        try:
+            from app.notifications.service import get_notification_service
+
+            svc = get_notification_service()
+            return svc.send(channel, recipient, subject, body, **kwargs)
+        except Exception as exc:
+            logger.warning(
+                "notification_send_failed",
+                channel=channel,
+                recipient=recipient,
+                error=str(exc),
+            )
+            return False

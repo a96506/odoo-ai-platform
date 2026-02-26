@@ -31,6 +31,7 @@ celery_app.conf.update(
         "app.tasks.celery_tasks.process_webhook_event": {"queue": "webhooks"},
         "app.tasks.celery_tasks.run_automation": {"queue": "automations"},
         "app.tasks.celery_tasks.scheduled_scan": {"queue": "scheduled"},
+        "app.tasks.celery_tasks.run_month_end_preclose_scan": {"queue": "scheduled"},
     },
     beat_schedule={
         "scan-pending-reconciliations": {
@@ -66,6 +67,13 @@ celery_app.conf.update(
         "cross-app-intelligence": {
             "task": "app.tasks.celery_tasks.run_cross_app_intelligence",
             "schedule": 21600.0,
+        },
+        "month-end-preclose-scan": {
+            "task": "app.tasks.celery_tasks.run_month_end_preclose_scan",
+            "schedule": 86400.0,
+            "args": ("",),
+            "kwargs": {},
+            "options": {"expires": 43200},
         },
     },
 )

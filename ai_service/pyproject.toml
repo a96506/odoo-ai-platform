@@ -1,0 +1,27 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "app/tasks/celery_app.py",
+    "app/automations/accounting.py",
+    "app/automations/crm.py",
+    "app/automations/sales.py",
+    "app/automations/purchase.py",
+    "app/automations/inventory.py",
+    "app/automations/hr.py",
+    "app/automations/project.py",
+    "app/automations/helpdesk.py",
+    "app/automations/manufacturing.py",
+    "app/automations/marketing.py",
+    "app/automations/cross_app.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 60
