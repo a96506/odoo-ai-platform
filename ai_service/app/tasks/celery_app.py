@@ -12,10 +12,10 @@ celery_app = Celery(
     "odoo_ai",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.celery_tasks"],
 )
 
 celery_app.conf.update(
+    include=["app.tasks.celery_tasks"],
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
