@@ -68,4 +68,4 @@ celery_app.conf.update(
     },
 )
 
-celery_app.autodiscover_tasks(["app.tasks"])
+celery_app.autodiscover_tasks(["app.tasks"], related_name="celery_tasks")
