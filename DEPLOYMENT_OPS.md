@@ -34,9 +34,176 @@ LOG_LEVEL=INFO
 
 ---
 
-## Deployment Process
+## Dokploy / Traefik Deployment (Current)
 
-### Standard Deployment (Phase 0 -- Current)
+The platform is deployed as a **Docker Compose stack** managed by **Dokploy** on a Hetzner VPS (`65.21.62.16`). Traefik handles external routing — containers do NOT bind host ports.
+
+### Key Infrastructure Facts
+
+| Item | Value |
+|------|-------|
+| Server | Hetzner VPS `65.21.62.16` |
+| Orchestrator | Dokploy v0.27.1 (`dokploy.atmatasolutions.com`) |
+| Reverse Proxy | Traefik (auto-configured by Dokploy) |
+| Git Source | `https://github.com/a96506/odoo-ai-platform.git` (branch: `main`) |
+| Compose ID | `MFFNIydB-V76TrLCXo4x0` |
+| AI API Domain | `odoo-ai-api-65-21-62-16.traefik.me` → ai-service:8000 |
+| Dashboard Domain | `odoo-ai-dash-65-21-62-16.traefik.me` → dashboard:3000 |
+| SSH Access | `ssh -i ~/.ssh/dokploy_ed25519 root@65.21.62.16` |
+
+### Critical: No Host Port Bindings
+
+The `docker-compose.yml` uses `expose:` (internal) NOT `ports:` (host-bound). Traefik routes external traffic to containers via the Docker network. **Never use `ports:` in the compose file** — the host ports are occupied by other services (N8N on 8000, Dokploy on 3000).
+
+```yaml
+# CORRECT — internal only, Traefik routes to it
+expose:
+  - "8000"
+
+# WRONG — will fail with "port is already allocated"
+ports:
+  - "8000:8000"
+```
+
+### Deployment Steps
+
+```bash
+# 1. Push to main
+git push origin main
+
+# 2. Deploy via Dokploy API
+curl -sk -X POST "https://dokploy.atmatasolutions.com/api/compose.deploy" \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $DOKPLOY_API_KEY" \
+  -d '{"composeId": "MFFNIydB-V76TrLCXo4x0"}'
+
+# 3. Monitor via SSH (wait for healthy)
+ssh -i ~/.ssh/dokploy_ed25519 root@65.21.62.16 \
+  "docker ps --format 'table {{.Names}}\t{{.Status}}' | grep compose-navigate"
+
+# 4. Verify endpoints
+curl -s http://odoo-ai-api-65-21-62-16.traefik.me/health
+```
+
+### Post-Deploy: Run Alembic Migrations
+
+Migrations do NOT run automatically. After deploying new DB schema changes:
+
+```bash
+ssh -i ~/.ssh/dokploy_ed25519 root@65.21.62.16 \
+  "docker exec compose-navigate-haptic-matrix-2qe6ph-ai-service-1 alembic upgrade head"
+```
+
+If tables already exist (created by `Base.metadata.create_all()`), stamp instead:
+
+```bash
+ssh -i ~/.ssh/dokploy_ed25519 root@65.21.62.16 \
+  "docker exec compose-navigate-haptic-matrix-2qe6ph-ai-service-1 alembic stamp head"
+```
+
+### Updating Environment Variables
+
+```bash
+curl -sk -X POST "https://dokploy.atmatasolutions.com/api/compose.update" \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $DOKPLOY_API_KEY" \
+  -d '{"composeId": "MFFNIydB-V76TrLCXo4x0", "env": "KEY=value\nKEY2=value2"}'
+
+# Then redeploy to pick up changes
+```
+
+---
+
+## Troubleshooting
+
+### Container stuck in "Created" state
+
+**Symptom:** `docker ps -a` shows a container with status `Created` (never starts).
+
+**Cause:** Almost always a **port conflict**. Check with:
+
+```bash
+docker inspect <container-name> --format '{{.State.Status}} {{.State.Error}}'
+```
+
+If the error says `Bind for 0.0.0.0:XXXX failed: port is already allocated`, find what's using the port:
+
+```bash
+lsof -i :8000   # or ss -tlnp | grep 8000
+```
+
+**Fix:** Use `expose:` instead of `ports:` in `docker-compose.yml` (see "Critical: No Host Port Bindings" above).
+
+### Old containers still serving traffic
+
+**Symptom:** Health check returns healthy but new endpoints return 404.
+
+**Cause:** A previous deployment left old containers running. Dokploy created new containers but they couldn't start (port conflict), so the old ones kept serving.
+
+**Fix:**
+
+```bash
+# Stop and remove old containers
+docker stop <old-container> && docker rm <old-container>
+
+# Remove stale new containers
+docker rm -f <stuck-container>
+
+# Redeploy
+curl -sk -X POST ".../api/compose.deploy" ...
+```
+
+### "Access Denied" from Odoo XML-RPC
+
+**Symptom:** Month-end scans return `<Fault 3: 'Access Denied'>` for every step.
+
+**Cause:** Wrong `ODOO_USERNAME` in the Dokploy env vars. Must be `alfailakawi1000@gmail.com`, NOT `admin`.
+
+**Fix:** Update env vars via Dokploy API (see "Updating Environment Variables" above), then redeploy.
+
+### "Invalid input value for enum automationtype"
+
+**Symptom:** 500 error when creating audit logs for new automation types.
+
+**Cause:** Alembic migration 001 (enum extension) wasn't run, or was rolled back when migration 002 failed.
+
+**Fix:** Add missing values directly:
+
+```bash
+docker exec <ai-db-container> psql -U odoo_ai -d odoo_ai -c "
+  ALTER TYPE automationtype ADD VALUE IF NOT EXISTS 'MONTH_END';
+  ALTER TYPE automationtype ADD VALUE IF NOT EXISTS 'DEDUPLICATION';
+  ALTER TYPE automationtype ADD VALUE IF NOT EXISTS 'CREDIT_MANAGEMENT';
+  ALTER TYPE automationtype ADD VALUE IF NOT EXISTS 'FORECASTING';
+  ALTER TYPE automationtype ADD VALUE IF NOT EXISTS 'REPORTING';
+  ALTER TYPE automationtype ADD VALUE IF NOT EXISTS 'DOCUMENT_PROCESSING';
+"
+```
+
+### Bank Statement Line creation fails ("not allowed to create")
+
+**Symptom:** `populate_accounting_test_data.py` fails creating BSL records.
+
+**Cause:** User needs `Show Full Accounting Features` group (id=29). Also, the Bank journal needs a `suspense_account_id` configured.
+
+**Fix:** The script handles both automatically (adds group + creates suspense account if missing).
+
+### Docker build makes server unresponsive
+
+**Symptom:** All services (Dokploy UI, Traefik, even SSH) become slow or timeout during deployment.
+
+**Cause:** The VPS has limited RAM/CPU. Building multiple Docker images concurrently exhausts resources.
+
+**Mitigation:**
+- Create a Hetzner snapshot before deploying
+- Deploy during low-traffic hours
+- Consider increasing VPS size for production
+
+---
+
+## Legacy Deployment (deploy.sh)
+
+For local or non-Dokploy environments:
 
 ```bash
 # 1. SSH to server

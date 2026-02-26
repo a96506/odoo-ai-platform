@@ -32,6 +32,13 @@ celery_app.conf.update(
         "app.tasks.celery_tasks.run_automation": {"queue": "automations"},
         "app.tasks.celery_tasks.scheduled_scan": {"queue": "scheduled"},
         "app.tasks.celery_tasks.run_month_end_preclose_scan": {"queue": "scheduled"},
+        "app.tasks.celery_tasks.run_dedup_scan": {"queue": "scheduled"},
+        "app.tasks.celery_tasks.run_credit_scoring": {"queue": "scheduled"},
+        "app.tasks.celery_tasks.run_credit_hold_check": {"queue": "scheduled"},
+        "app.tasks.celery_tasks.run_daily_digest": {"queue": "scheduled"},
+        "app.tasks.celery_tasks.run_cash_flow_forecast": {"queue": "scheduled"},
+        "app.tasks.celery_tasks.run_forecast_accuracy_check": {"queue": "scheduled"},
+        "app.tasks.celery_tasks.run_scheduled_reports": {"queue": "scheduled"},
     },
     beat_schedule={
         "scan-pending-reconciliations": {
@@ -74,6 +81,41 @@ celery_app.conf.update(
             "args": ("",),
             "kwargs": {},
             "options": {"expires": 43200},
+        },
+        "weekly-dedup-scan": {
+            "task": "app.tasks.celery_tasks.run_dedup_scan",
+            "schedule": 604800.0,
+            "options": {"expires": 86400},
+        },
+        "daily-credit-scoring": {
+            "task": "app.tasks.celery_tasks.run_credit_scoring",
+            "schedule": 86400.0,
+            "options": {"expires": 43200},
+        },
+        "credit-hold-release-check": {
+            "task": "app.tasks.celery_tasks.run_credit_hold_check",
+            "schedule": 3600.0,
+            "options": {"expires": 1800},
+        },
+        "daily-digest-generation": {
+            "task": "app.tasks.celery_tasks.run_daily_digest",
+            "schedule": 86400.0,
+            "options": {"expires": 43200},
+        },
+        "daily-cash-flow-forecast": {
+            "task": "app.tasks.celery_tasks.run_cash_flow_forecast",
+            "schedule": 86400.0,
+            "options": {"expires": 43200},
+        },
+        "daily-forecast-accuracy-check": {
+            "task": "app.tasks.celery_tasks.run_forecast_accuracy_check",
+            "schedule": 86400.0,
+            "options": {"expires": 43200},
+        },
+        "hourly-scheduled-reports": {
+            "task": "app.tasks.celery_tasks.run_scheduled_reports",
+            "schedule": 3600.0,
+            "options": {"expires": 1800},
         },
     },
 )

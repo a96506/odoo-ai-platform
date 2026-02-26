@@ -23,6 +23,14 @@ from app.routers.chat import router as chat_router
 from app.routers.insights import router as insights_router
 from app.routers.closing import router as closing_router
 from app.routers.reconciliation import router as reconciliation_router
+from app.routers.deduplication import router as dedup_router
+from app.routers.credit import router as credit_router
+from app.routers.documents import router as documents_router
+from app.routers.digest import router as digest_router
+from app.routers.forecast import router as forecast_router
+from app.routers.reports import router as reports_router
+from app.routers.role_dashboard import router as role_dashboard_router
+from app.routers.websocket import router as ws_router
 
 logger = structlog.get_logger()
 
@@ -62,6 +70,14 @@ app.include_router(chat_router)
 app.include_router(insights_router)
 app.include_router(closing_router)
 app.include_router(reconciliation_router)
+app.include_router(dedup_router)
+app.include_router(credit_router)
+app.include_router(documents_router)
+app.include_router(digest_router)
+app.include_router(forecast_router)
+app.include_router(reports_router)
+app.include_router(role_dashboard_router)
+app.include_router(ws_router)
 
 
 def seed_default_rules():
@@ -100,6 +116,21 @@ def seed_default_rules():
             ("Month-end closing scan", "month_end", "preclose_scan"),
             ("Month-end closing analysis", "month_end", "closing_analysis"),
             ("Enhanced bank reconciliation", "accounting", "enhanced_reconciliation"),
+            ("Weekly deduplication scan", "deduplication", "weekly_scan"),
+            ("Duplicate detection on create", "deduplication", "duplicate_check"),
+            ("Daily credit scoring", "credit_management", "calculate_scores"),
+            ("Credit check on SO", "credit_management", "credit_check"),
+            ("Credit hold auto-release", "credit_management", "auto_release"),
+            ("Smart invoice processing", "document_processing", "process_document"),
+            ("IDP vendor matching", "document_processing", "vendor_match"),
+            ("IDP PO validation", "document_processing", "po_validation"),
+            ("Daily digest generation", "reporting", "generate_digest"),
+            ("Daily digest delivery", "reporting", "deliver_digest"),
+            ("Daily cash flow forecast", "forecasting", "generate_forecast"),
+            ("Scenario analysis", "forecasting", "scenario_analysis"),
+            ("Forecast accuracy tracking", "forecasting", "accuracy_tracking"),
+            ("NL report generation", "reporting", "generate_report"),
+            ("Scheduled report execution", "reporting", "scheduled_report"),
         ]
 
         for name, atype, action in defaults:

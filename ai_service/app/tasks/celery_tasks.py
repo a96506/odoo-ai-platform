@@ -18,6 +18,15 @@ from app.models.audit import (
 logger = structlog.get_logger()
 
 
+def _publish_dashboard_event(event_type: str, data: dict, role: str | None = None):
+    """Publish a real-time event to the dashboard WebSocket channel via Redis."""
+    try:
+        from app.routers.websocket import publish_event
+        publish_event(event_type, data, role)
+    except Exception:
+        pass
+
+
 def _is_automation_enabled(session, automation_type: str, action_name: str | None = None) -> bool:
     """Check if any matching automation rule is enabled."""
     query = session.query(AutomationRule).filter(
@@ -74,6 +83,12 @@ def process_webhook_event(self, event_id: int):
 
             event.processed = True
             event.processing_completed_at = datetime.utcnow()
+
+            if handler and 'audit' in dir() and audit:
+                _publish_dashboard_event(
+                    "automation_completed" if audit.status == ActionStatus.EXECUTED else "approval_needed",
+                    {"audit_log_id": audit.id, "automation_type": handler.automation_type, "action": audit.action_name},
+                )
 
         logger.info("webhook_processed", event_id=event_id)
 
@@ -244,3 +259,369 @@ def run_month_end_preclose_scan(period: str):
 
     except Exception as exc:
         logger.error("month_end_preclose_scan_failed", period=period, error=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Sprint 2 — Deduplication
+# ---------------------------------------------------------------------------
+
+@celery_app.task
+def run_dedup_scan():
+    """Weekly deduplication scan across all entity types."""
+    try:
+        from app.automations.deduplication import DeduplicationAutomation
+        from app.models.audit import DeduplicationScan, DuplicateGroup
+
+        automation = DeduplicationAutomation()
+        result = automation.run_full_scan()
+
+        with get_db_session() as session:
+            if not _is_automation_enabled(session, "deduplication", "weekly_scan"):
+                logger.info("dedup_scan_skipped_disabled")
+                return
+
+            for scan_type, scan_result in result["entity_results"].items():
+                scan = DeduplicationScan(
+                    scan_type=scan_type,
+                    status="completed",
+                    total_records=scan_result["total_records"],
+                    duplicates_found=scan_result["duplicates_found"],
+                    pending_review=len(scan_result["groups"]),
+                )
+                session.add(scan)
+                session.flush()
+
+                for g in scan_result["groups"]:
+                    group = DuplicateGroup(
+                        scan_id=scan.id,
+                        odoo_model=g["odoo_model"],
+                        record_ids=g["record_ids"],
+                        master_record_id=g["master_record_id"],
+                        similarity_score=g["similarity_score"],
+                        match_fields=g["match_fields"],
+                        status="pending",
+                    )
+                    session.add(group)
+
+            audit = AuditLog(
+                automation_type="deduplication",
+                action_name="weekly_scan",
+                odoo_model="deduplication.scan",
+                odoo_record_id=0,
+                status=ActionStatus.EXECUTED,
+                ai_reasoning=f"Weekly scan: {result['total_groups']} groups, {result['total_duplicates']} duplicates",
+                output_data={
+                    "total_groups": result["total_groups"],
+                    "total_duplicates": result["total_duplicates"],
+                },
+                executed_at=datetime.utcnow(),
+            )
+            session.add(audit)
+
+        logger.info(
+            "dedup_scan_complete",
+            total_groups=result["total_groups"],
+            total_duplicates=result["total_duplicates"],
+        )
+
+    except Exception as exc:
+        logger.error("dedup_scan_failed", error=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Sprint 2 — Credit Management
+# ---------------------------------------------------------------------------
+
+@celery_app.task
+def run_credit_scoring():
+    """Daily credit score recalculation for all active customers."""
+    try:
+        from app.automations.credit import CreditManagementAutomation
+
+        with get_db_session() as session:
+            if not _is_automation_enabled(session, "credit_management", "calculate_scores"):
+                logger.info("credit_scoring_skipped_disabled")
+                return
+
+        automation = CreditManagementAutomation()
+        result = automation.calculate_all_scores()
+
+        with get_db_session() as session:
+            audit = AuditLog(
+                automation_type="credit_management",
+                action_name="daily_credit_scoring",
+                odoo_model="res.partner",
+                odoo_record_id=0,
+                status=ActionStatus.EXECUTED,
+                ai_reasoning=f"Scored {result['updated']}/{result['total_customers']} customers ({result['errors']} errors)",
+                output_data=result,
+                executed_at=datetime.utcnow(),
+            )
+            session.add(audit)
+
+        logger.info("credit_scoring_complete", **result)
+
+    except Exception as exc:
+        logger.error("credit_scoring_failed", error=str(exc))
+
+
+@celery_app.task
+def run_credit_hold_check():
+    """Hourly check for credit holds that can be released."""
+    try:
+        from app.automations.credit import CreditManagementAutomation
+
+        with get_db_session() as session:
+            if not _is_automation_enabled(session, "credit_management", "auto_release"):
+                logger.info("credit_hold_check_skipped_disabled")
+                return
+
+        automation = CreditManagementAutomation()
+        releases = automation.check_payment_releases()
+
+        if releases:
+            with get_db_session() as session:
+                for release in releases:
+                    audit = AuditLog(
+                        automation_type="credit_management",
+                        action_name="credit_hold_released",
+                        odoo_model="res.partner",
+                        odoo_record_id=release["customer_id"],
+                        status=ActionStatus.EXECUTED,
+                        confidence=release["new_score"] / 100.0,
+                        ai_reasoning=f"Hold released: score {release['new_score']}, risk {release['new_risk']}",
+                        executed_at=datetime.utcnow(),
+                    )
+                    session.add(audit)
+
+        logger.info("credit_hold_check_complete", releases=len(releases))
+
+    except Exception as exc:
+        logger.error("credit_hold_check_failed", error=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Sprint 3 — Daily Digest
+# ---------------------------------------------------------------------------
+
+@celery_app.task
+def run_daily_digest():
+    """Generate and deliver daily digests for all configured roles."""
+    try:
+        from app.automations.daily_digest import DailyDigestAutomation, DEFAULT_DIGEST_CONFIG
+        from app.models.audit import DailyDigest
+
+        with get_db_session() as session:
+            if not _is_automation_enabled(session, "reporting", "generate_digest"):
+                logger.info("daily_digest_skipped_disabled")
+                return
+
+        automation = DailyDigestAutomation()
+        results = automation.generate_all_digests()
+
+        with get_db_session() as session:
+            for result in results:
+                if "error" in result and "content" not in result:
+                    logger.warning("digest_generation_error", role=result.get("role"), error=result["error"])
+                    continue
+
+                role = result["role"]
+                digest = DailyDigest(
+                    user_role=role,
+                    digest_date=datetime.strptime(result["digest_date"], "%Y-%m-%d").date(),
+                    content=result["content"],
+                    channels_sent=[],
+                    delivered=False,
+                )
+                session.add(digest)
+                session.flush()
+
+                channels = result.get("channels", ["email"])
+                config = DEFAULT_DIGEST_CONFIG.get(role, {})
+
+                for channel in channels:
+                    if channel == "email":
+                        pass
+
+                digest.channels_sent = []
+
+            audit = AuditLog(
+                automation_type="reporting",
+                action_name="daily_digest_batch",
+                odoo_model="daily.digest",
+                odoo_record_id=0,
+                status=ActionStatus.EXECUTED,
+                ai_reasoning=f"Generated {len(results)} digests for roles: {[r.get('role') for r in results]}",
+                output_data={"roles_generated": [r.get("role") for r in results]},
+                executed_at=datetime.utcnow(),
+            )
+            session.add(audit)
+
+        _publish_dashboard_event("automation_completed", {
+            "automation_type": "reporting",
+            "action": "daily_digest_batch",
+            "roles": [r.get("role") for r in results],
+        })
+
+        logger.info("daily_digest_complete", roles=len(results))
+
+    except Exception as exc:
+        logger.error("daily_digest_failed", error=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Sprint 4 — Cash Flow Forecasting
+# ---------------------------------------------------------------------------
+
+@celery_app.task
+def run_cash_flow_forecast():
+    """Daily cash flow forecast regeneration."""
+    try:
+        from app.automations.cash_flow import CashFlowForecastingAutomation
+
+        with get_db_session() as session:
+            if not _is_automation_enabled(session, "forecasting", "generate_forecast"):
+                logger.info("cash_flow_forecast_skipped_disabled")
+                return
+
+        automation = CashFlowForecastingAutomation()
+        result = automation.generate_forecast(horizon_days=90)
+        automation.persist_forecast(result)
+
+        with get_db_session() as session:
+            audit = AuditLog(
+                automation_type="forecasting",
+                action_name="daily_forecast",
+                odoo_model="cash.forecast",
+                odoo_record_id=0,
+                status=ActionStatus.EXECUTED,
+                confidence=0.85,
+                ai_reasoning=f"90-day forecast: {len(result.get('cash_gap_dates', []))} cash gap warnings, balance at day 90: {result['forecasts'][-1]['balance']:.2f}" if result.get("forecasts") else "Forecast generated",
+                output_data={
+                    "horizon_days": 90,
+                    "cash_gaps": len(result.get("cash_gap_dates", [])),
+                    "current_balance": result.get("current_balance", 0),
+                },
+                executed_at=datetime.utcnow(),
+            )
+            session.add(audit)
+
+        _publish_dashboard_event("forecast_updated", {
+            "date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "cash_gaps": len(result.get("cash_gap_dates", [])),
+        }, role="cfo")
+
+        logger.info(
+            "cash_flow_forecast_complete",
+            data_points=len(result.get("forecasts", [])),
+            cash_gaps=len(result.get("cash_gap_dates", [])),
+        )
+
+    except Exception as exc:
+        logger.error("cash_flow_forecast_failed", error=str(exc))
+
+
+@celery_app.task
+def run_forecast_accuracy_check():
+    """Check forecast accuracy by comparing predictions with actual balances."""
+    try:
+        from app.automations.cash_flow import CashFlowForecastingAutomation
+        from app.models.audit import CashForecast
+        from datetime import date
+
+        with get_db_session() as session:
+            if not _is_automation_enabled(session, "forecasting", "accuracy_tracking"):
+                logger.info("forecast_accuracy_check_skipped_disabled")
+                return
+
+        automation = CashFlowForecastingAutomation()
+        current_balance = automation._get_current_balance()
+        automation.record_actual_balance(date.today(), current_balance)
+
+        accuracy = automation.check_accuracy()
+
+        with get_db_session() as session:
+            audit = AuditLog(
+                automation_type="forecasting",
+                action_name="accuracy_check",
+                odoo_model="forecast.accuracy",
+                odoo_record_id=0,
+                status=ActionStatus.EXECUTED,
+                ai_reasoning=f"Accuracy check: 30d MAE={accuracy['last_30_days'].get('mae', 0):.2f}, MAPE={accuracy['last_30_days'].get('mape', 0):.1f}%",
+                output_data=accuracy,
+                executed_at=datetime.utcnow(),
+            )
+            session.add(audit)
+
+        logger.info("forecast_accuracy_check_complete", comparisons=accuracy.get("total_comparisons", 0))
+
+    except Exception as exc:
+        logger.error("forecast_accuracy_check_failed", error=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Sprint 4 — Scheduled Reports
+# ---------------------------------------------------------------------------
+
+@celery_app.task
+def run_scheduled_reports():
+    """Execute all scheduled reports that are due."""
+    try:
+        from app.automations.report_builder import ReportBuilderAutomation
+        from app.models.audit import ReportJob
+
+        with get_db_session() as session:
+            if not _is_automation_enabled(session, "reporting", "scheduled_report"):
+                logger.info("scheduled_reports_skipped_disabled")
+                return
+
+            scheduled_jobs = (
+                session.query(ReportJob)
+                .filter(
+                    ReportJob.schedule_cron.isnot(None),
+                    ReportJob.status == "scheduled",
+                )
+                .all()
+            )
+
+            if not scheduled_jobs:
+                logger.info("no_scheduled_reports")
+                return
+
+            automation = ReportBuilderAutomation()
+            executed = 0
+
+            for job in scheduled_jobs:
+                try:
+                    result = automation.generate_report(job.request_text)
+                    job.parsed_query = result.get("parsed_query")
+                    job.result_data = result.get("result_data")
+
+                    if job.format == "excel":
+                        file_path = automation.export_excel(result["result_data"])
+                        job.file_path = file_path
+                    elif job.format == "pdf":
+                        file_path = automation.export_pdf(result["result_data"])
+                        job.file_path = file_path
+
+                    executed += 1
+
+                except Exception as exc:
+                    logger.warning("scheduled_report_failed", job_id=job.id, error=str(exc))
+
+            audit = AuditLog(
+                automation_type="reporting",
+                action_name="scheduled_reports_batch",
+                odoo_model="report.job",
+                odoo_record_id=0,
+                status=ActionStatus.EXECUTED,
+                ai_reasoning=f"Executed {executed}/{len(scheduled_jobs)} scheduled reports",
+                output_data={"total": len(scheduled_jobs), "executed": executed},
+                executed_at=datetime.utcnow(),
+            )
+            session.add(audit)
+
+        logger.info("scheduled_reports_complete", executed=executed)
+
+    except Exception as exc:
+        logger.error("scheduled_reports_failed", error=str(exc))

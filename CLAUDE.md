@@ -116,7 +116,7 @@ odoo-ai-platform/
 │   │   └── versions/
 │   │       ├── 001_extend_automation_type_enum.py
 │   │       └── 002_phase1_tables.py  # 13 new Phase 1 tables
-│   ├── tests/                   # pytest suite (115 tests, 67%+ coverage)
+│   ├── tests/                   # pytest suite (362 tests, 69%+ coverage)
 │   │   ├── conftest.py          # In-memory SQLite DB, TestClient, mocks
 │   │   ├── fixtures/
 │   │   │   └── webhook_payloads.py  # 13 fixtures for all 11 Odoo models
@@ -124,6 +124,13 @@ odoo-ai-platform/
 │   │   ├── test_base_automation.py  # BaseAutomation routing/gating tests
 │   │   ├── test_month_end_closing.py  # Month-end closing automation + API tests (22 tests)
 │   │   ├── test_bank_reconciliation.py  # Fuzzy matching engine + API tests (19 tests)
+│   │   ├── test_deduplication.py # Dedup matching engine + API tests (29 tests)
+│   │   ├── test_credit_management.py # Credit scoring engine + API tests (42 tests)
+│   │   ├── test_document_processing.py # IDP extraction + vendor match + API tests (28 tests)
+│   │   ├── test_daily_digest.py  # Daily digest generation + delivery + API tests (24 tests)
+│   │   ├── test_cash_flow.py     # Cash flow forecasting engine + scenarios + API tests (39 tests)
+│   │   ├── test_report_builder.py # NL report builder + exports + API tests (50 tests)
+│   │   ├── test_role_dashboard.py # Role-based dashboards + WebSocket + schemas (35 tests)
 │   │   ├── test_config.py       # Settings property tests
 │   │   ├── test_fixtures.py     # Fixture validation tests
 │   │   ├── test_models.py       # All 18 model CRUD tests
@@ -148,7 +155,15 @@ odoo-ai-platform/
 │       │   ├── chat.py          # POST /api/chat, /api/chat/confirm
 │       │   ├── insights.py      # GET /api/insights, POST /api/trigger
 │       │   ├── closing.py       # POST /api/close/start, GET /api/close/{period}/status, POST step/complete, POST rescan
-│       │   └── reconciliation.py # POST /api/reconciliation/start, GET suggestions, POST match/skip
+│       │   ├── reconciliation.py # POST /api/reconciliation/start, GET suggestions, POST match/skip
+│       │   ├── deduplication.py # POST /api/dedup/scan, GET scans, POST merge/dismiss, POST check
+│       │   ├── credit.py       # GET /api/credit/{id}, POST check, POST recalculate, POST releases
+│       │   ├── documents.py    # POST /api/documents/process, GET /{id}, POST /{id}/correct
+│       │   ├── digest.py       # GET /api/digest/latest, POST send, PUT config, GET history, GET preview
+│       │   ├── forecast.py     # GET /api/forecast/cashflow, POST scenario, GET accuracy, GET/GET scenarios
+│       │   ├── reports.py      # POST /api/reports/generate, GET /{id}, GET /{id}/download, POST schedule
+│       │   ├── role_dashboard.py # GET /api/dashboard/{cfo,sales,warehouse} — role-specific aggregated views
+│       │   └── websocket.py    # WS /ws/dashboard — real-time updates via Redis pub/sub
 │       ├── automations/
 │       │   ├── __init__.py      # Automation registry
 │       │   ├── base.py          # BaseAutomation class (+ handle_batch, notify)
@@ -164,7 +179,13 @@ odoo-ai-platform/
 │       │   ├── helpdesk.py      # Ticket categorization, assignment, solution suggestion
 │       │   ├── manufacturing.py # Production scheduling, quality control
 │       │   ├── marketing.py     # Contact segmentation, campaign optimization
-│       │   └── cross_app.py     # Cross-module intelligence engine
+│       │   ├── cross_app.py     # Cross-module intelligence engine
+│       │   ├── deduplication.py # Cross-entity dedup (fuzzy name/email/phone/VAT matching)
+│       │   ├── credit.py        # Customer credit scoring + limit enforcement
+│       │   ├── document_processing.py # Vision-LLM invoice extraction + fuzzy vendor matching
+│       │   ├── daily_digest.py  # Role-based daily briefing (CFO/Sales/Warehouse)
+│       │   ├── cash_flow.py     # 30/60/90-day cash flow forecasting + scenarios
+│       │   └── report_builder.py # NL query → Odoo data → table/Excel/PDF export
 │       ├── notifications/
 │       │   ├── __init__.py      # Package init
 │       │   ├── base.py          # NotificationChannel abstract base
@@ -211,20 +232,28 @@ odoo-ai-platform/
 ├── dashboard/                   # Next.js + Tailwind monitoring UI
 │   ├── Dockerfile
 │   ├── .dockerignore
-│   ├── package.json             # next 14, react 18, tailwindcss
+│   ├── package.json             # next 14, react 18, tailwindcss, recharts
 │   ├── public/                  # Static assets (favicon etc.)
 │   └── src/
 │       ├── app/
 │       │   ├── layout.js
-│       │   ├── page.js          # Main dashboard (6 tabs)
+│       │   ├── page.js          # Main dashboard (role switching + 6 tabs)
 │       │   └── globals.css
+│       ├── lib/
+│       │   └── api.js           # Centralized API helper with X-API-Key auth
+│       ├── hooks/
+│       │   └── useWebSocket.js  # WebSocket hook with auto-reconnect
 │       └── components/
 │           ├── StatsCards.js     # KPI cards (total, success rate, approvals, time saved)
 │           ├── AuditLog.js      # Automation audit trail
 │           ├── ApprovalQueue.js # Human-in-the-loop approval UI
 │           ├── RulesPanel.js    # Enable/disable automation rules
 │           ├── ChatInterface.js # Natural language ERP chat
-│           └── InsightsPanel.js # Cross-app intelligence results
+│           ├── InsightsPanel.js # Cross-app intelligence results
+│           ├── RoleSwitcher.js  # Role selection dropdown (CFO/Sales/Warehouse/Overview)
+│           ├── CFODashboard.js  # Cash forecast AreaChart, AR/AP aging, P&L, close status
+│           ├── SalesDashboard.js # Pipeline BarChart, conversion funnel, at-risk deals
+│           └── WarehouseDashboard.js # Stock levels chart, reorder alerts, shipments
 │
 └── scripts/
     ├── deploy.sh                # Docker deployment script
@@ -324,7 +353,7 @@ This applies to: FastAPI, SQLAlchemy, Alembic, Pydantic, Celery, Anthropic SDK, 
 - Webhook signature (HMAC-SHA256) is **mandatory** on all incoming Odoo webhooks; unsigned requests are rejected with 401
 - DB engine and session factory are cached as module-level singletons for connection pooling
 - FastAPI endpoints use `Depends(get_db)` for session lifecycle; Celery tasks use `with get_db_session()` context manager
-- API routes are split into routers: health, dashboard, rules, chat, insights, closing, reconciliation (main.py is a lean app factory)
+- API routes are split into routers: health, dashboard, rules, chat, insights, closing, reconciliation, deduplication, credit, documents, digest, forecast, reports, role_dashboard, websocket (main.py is a lean app factory)
 - `BaseAutomation` provides `handle_batch()` for multi-record processing and `notify()` for sending messages via channels
 - `NotificationService` routes messages to email/slack/whatsapp channels; channels are auto-registered and checked via `is_configured()`
 - Settings includes optional Phase 1 config fields (WhatsApp, Slack, SMTP, forecasting, IDP) -- all disabled by default
@@ -353,3 +382,43 @@ This applies to: FastAPI, SQLAlchemy, Alembic, Pydantic, Celery, Anthropic SDK, 
 - Reconciliation sessions persist in DB; learned match rules are stored per journal and carried across sessions
 - Fuzzy matching tolerances: amount ±$0.50 or ±2%; reference fuzzy threshold 70% (token_sort_ratio)
 - Candidates are consumed once matched — no duplicate matching within a session
+- Cross-entity deduplication uses two-tier matching: strong signal (exact email/phone/VAT/barcode = instant duplicate) + weighted composite (name/email/phone/VAT with per-entity weights)
+- Dedup similarity normalizes by matched-field weight only — missing fields don't penalize score; name threshold 70%, email threshold 90%
+- Dedup uses union-find clustering to group multi-way duplicates transitively; heuristic master selection picks most complete record
+- Dedup scans support 3 entities: res.partner (contacts), crm.lead, product.template; configurable via ENTITY_CONFIGS
+- Weekly dedup scan via Celery beat; real-time duplicate check on record creation via webhook
+- Credit scoring uses 4 weighted factors: payment history (40%), overdue ratio (25%), order volume (20%), relationship age (15%); composite 0-100
+- 5-tier risk classification: low (>=80), normal (>=60), elevated (>=40), high (>=20), critical (<20)
+- Credit check on SO creation: blocks if exposure > limit or customer on hold; auto-releases hold when payment reduces exposure below limit
+- Daily credit score batch recalculation + hourly hold-release check via Celery beat
+- Credit scores persist in `credit_scores` table; hold_active flag enforced on SO creation webhook
+- IDP uses a 5-stage pipeline: content prep (pdfplumber text + Vision image) → Claude extraction (tool-use) → fuzzy vendor matching (rapidfuzz token_sort_ratio, 70% threshold) → PO cross-validation (line items, amounts ±2%) → confidence-gated bill creation
+- IDP sends images to Claude Vision API as base64 content blocks; falls back to text extraction for text-based PDFs
+- IDP learning loop: corrections stored in `extraction_corrections` table; past corrections for same vendor auto-applied when count >= 2
+- IDP confidence scoring: weighted average of per-field confidences (vendor 25%, total 25%, line_items 20%, invoice_number 15%, date 10%, po_reference 5%)
+- IDP accepts PDF, JPEG, PNG, WebP via multipart/form-data file upload; processing results stored in `document_processing_jobs` table
+- Daily digest generates per-role briefings: CFO (AR/AP aging, cash, overdue, approvals, anomalies), Sales Manager (pipeline, at-risk deals, follow-ups, win/loss), Warehouse Manager (low stock, deliveries, receipts)
+- Digest uses Claude tool-use for AI narrative; falls back to structured fallback digest when Claude unavailable
+- Digest delivery via email (HTML + plain text); in-DB storage for dashboard access; daily Celery beat schedule
+- Digest roles: cfo, sales_manager, warehouse_manager; configurable channels, send time, and enable/disable per role via PUT /api/digest/config
+- Cash flow forecasting uses a hybrid statistical model: AR aging (due date distribution), AP commitments (bill due dates), pipeline (expected_revenue * probability), recurring expenses (auto-detected from vendor bill patterns with CV < 0.3)
+- Forecast confidence bands widen linearly with horizon: uncertainty = 15% * |balance| * (day_offset / horizon)
+- Scenario planning supports: delay_customer_{id} (delay days), remove_deal_{id} (remove from pipeline), reduce_ar_by (%), increase_ap_by (%), adjust_expense_{category} (multiplier)
+- Forecast accuracy tracked via ForecastAccuracyLog: MAE and MAPE computed for 30/60/90-day windows; daily actual balance recording
+- Daily forecast regeneration + persistence via Celery beat; accuracy check runs daily
+- NL Report Builder uses Claude tool-use to parse queries into structured Odoo domain/fields/group_by; keyword-based fallback when Claude unavailable
+- Report Builder supports 8 Odoo models: sale.order, account.move, crm.lead, product.template, product.product, res.partner, purchase.order, hr.expense
+- Excel export via openpyxl with styled headers; PDF export as formatted text; scheduled reports via cron + hourly Celery beat check
+- Reports stored in ReportJob table with status lifecycle: pending -> generating -> completed/error/scheduled
+- Role-based AI dashboards provide 3 views: CFO (cash forecast AreaChart, AR/AP aging BarChart, P&L summary, close status, anomalies), Sales Manager (pipeline BarChart, conversion funnel, at-risk deals table, win rate, quota), Warehouse Manager (stock levels vs reorder BarChart, alerts list, shipment counts)
+- Dashboard endpoints: GET /api/dashboard/{cfo,sales,warehouse} aggregate data from DB models + Odoo XML-RPC; gracefully degrade when Odoo unavailable
+- WebSocket endpoint WS /ws/dashboard supports optional `?role=` query param for role-filtered events; ConnectionManager broadcasts via Redis pub/sub
+- Redis pub/sub channel `dashboard_events` carries events: automation_completed, approval_needed, forecast_updated, alert
+- Celery tasks publish events to Redis pub/sub after task completion for real-time dashboard updates
+- Dashboard frontend uses recharts (AreaChart, BarChart, LineChart) for all chart components; recharts ^2.12.0 already in package.json
+- RoleSwitcher component in header persists selected role to localStorage; switches between Overview, CFO, Sales, Warehouse views
+- useWebSocket custom hook manages WebSocket lifecycle with exponential backoff reconnect (1s, 2s, 4s, 8s, 16s, 30s)
+- Centralized API helper (dashboard/src/lib/api.js) adds X-API-Key header to all requests; WS URL derived from API URL
+- Redis maxmemory increased from 128mb to 256mb; NEXT_PUBLIC_WS_URL and NEXT_PUBLIC_API_KEY env vars added to dashboard service
+- 19 automation handlers registered: 10 original + month_end + deduplication + credit + document_processing + daily_digest + cash_flow + report_builder + role_dashboard + websocket
+- 362 tests total (35 new for Sprint 5); full test suite passes
