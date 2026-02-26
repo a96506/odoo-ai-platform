@@ -21,7 +21,6 @@
         "hr_holidays",
         "hr_expense",
         "project",
-        "helpdesk",
         "mrp",
         "mass_mailing",
     ],
