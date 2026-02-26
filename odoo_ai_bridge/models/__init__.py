@@ -1,3 +1,5 @@
+import importlib
+
 from . import ai_config
 from . import ai_webhook_mixin
 from . import account_move
@@ -11,7 +13,5 @@ from . import project_task
 from . import mrp_production
 from . import mailing_mailing
 
-try:
+if importlib.util.find_spec("odoo.addons.helpdesk"):
     from . import helpdesk_ticket
-except ImportError:
-    pass
