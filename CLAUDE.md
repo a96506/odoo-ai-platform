@@ -179,3 +179,10 @@ alembic upgrade head
 - AI DB hostname is `ai-db` (must match in AI_DATABASE_URL)
 - deploy.sh validates .env placeholders before building
 - Odoo MCP server configured via `ODOO_MCP_URL` and `ODOO_MCP_TRANSPORT` env vars; API key stored in `ODOO_API_KEY`
+- Celery worker initializes automations and DB via `worker_init` signal (not just FastAPI lifespan)
+- Celery task discovery uses explicit `include=["app.tasks.celery_tasks"]` in `conf.update()` (not `autodiscover_tasks`)
+- `odoo_ai_bridge` callbacks use `type="http"` (not `type="json"`) for raw JSON POST compatibility
+- `helpdesk` module is optional: conditionally imported only if `odoo.addons.helpdesk` is installed
+- Deployed services are routed via Traefik (no direct port mappings in Dokploy environment)
+- Live endpoints: AI API at `odoo-ai-api-65-21-62-16.traefik.me`, Dashboard at `odoo-ai-dash-65-21-62-16.traefik.me`
+- Odoo admin login is `alfailakawi1000@gmail.com` (not `admin`)
