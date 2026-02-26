@@ -12,6 +12,14 @@ from odoo.http import request, Response
 _logger = logging.getLogger(__name__)
 
 
+def _json_response(data, status=200):
+    return Response(
+        json.dumps(data, default=str),
+        status=status,
+        content_type="application/json",
+    )
+
+
 class AiCallbackController(http.Controller):
 
     def _check_auth(self):
@@ -22,12 +30,15 @@ class AiCallbackController(http.Controller):
         config = request.env["ai.config"].sudo().get_config()
         return token == config.webhook_secret
 
-    @http.route("/ai/callback/read", type="json", auth="none", methods=["POST"], csrf=False)
+    def _get_json_body(self):
+        return json.loads(request.httprequest.data or "{}")
+
+    @http.route("/ai/callback/read", type="http", auth="none", methods=["POST"], csrf=False)
     def read_record(self, **kwargs):
         if not self._check_auth():
-            return {"error": "Unauthorized"}
+            return _json_response({"error": "Unauthorized"}, 401)
 
-        data = json.loads(request.httprequest.data)
+        data = self._get_json_body()
         model = data.get("model")
         record_id = data.get("record_id")
         fields = data.get("fields", [])
@@ -35,19 +46,19 @@ class AiCallbackController(http.Controller):
         try:
             record = request.env[model].sudo().browse(record_id)
             if not record.exists():
-                return {"error": "Record not found"}
+                return _json_response({"error": "Record not found"}, 404)
             result = record.read(fields)[0] if fields else record.read()[0]
-            return {"success": True, "data": self._serialize(result)}
+            return _json_response({"success": True, "data": self._serialize(result)})
         except Exception as e:
             _logger.error("AI callback read failed: %s", str(e))
-            return {"error": str(e)}
+            return _json_response({"error": str(e)}, 500)
 
-    @http.route("/ai/callback/search", type="json", auth="none", methods=["POST"], csrf=False)
+    @http.route("/ai/callback/search", type="http", auth="none", methods=["POST"], csrf=False)
     def search_records(self, **kwargs):
         if not self._check_auth():
-            return {"error": "Unauthorized"}
+            return _json_response({"error": "Unauthorized"}, 401)
 
-        data = json.loads(request.httprequest.data)
+        data = self._get_json_body()
         model = data.get("model")
         domain = data.get("domain", [])
         fields = data.get("fields", [])
@@ -58,17 +69,17 @@ class AiCallbackController(http.Controller):
             records = request.env[model].sudo().search_read(
                 domain, fields=fields, limit=limit, order=order
             )
-            return {"success": True, "data": [self._serialize(r) for r in records]}
+            return _json_response({"success": True, "data": [self._serialize(r) for r in records]})
         except Exception as e:
             _logger.error("AI callback search failed: %s", str(e))
-            return {"error": str(e)}
+            return _json_response({"error": str(e)}, 500)
 
-    @http.route("/ai/callback/write", type="json", auth="none", methods=["POST"], csrf=False)
+    @http.route("/ai/callback/write", type="http", auth="none", methods=["POST"], csrf=False)
     def write_record(self, **kwargs):
         if not self._check_auth():
-            return {"error": "Unauthorized"}
+            return _json_response({"error": "Unauthorized"}, 401)
 
-        data = json.loads(request.httprequest.data)
+        data = self._get_json_body()
         model = data.get("model")
         record_id = data.get("record_id")
         values = data.get("values", {})
@@ -76,38 +87,38 @@ class AiCallbackController(http.Controller):
         try:
             record = request.env[model].sudo().browse(record_id)
             if not record.exists():
-                return {"error": "Record not found"}
+                return _json_response({"error": "Record not found"}, 404)
             record.write(values)
             _logger.info("AI callback: updated %s(%s)", model, record_id)
-            return {"success": True}
+            return _json_response({"success": True})
         except Exception as e:
             _logger.error("AI callback write failed: %s", str(e))
-            return {"error": str(e)}
+            return _json_response({"error": str(e)}, 500)
 
-    @http.route("/ai/callback/create", type="json", auth="none", methods=["POST"], csrf=False)
+    @http.route("/ai/callback/create", type="http", auth="none", methods=["POST"], csrf=False)
     def create_record(self, **kwargs):
         if not self._check_auth():
-            return {"error": "Unauthorized"}
+            return _json_response({"error": "Unauthorized"}, 401)
 
-        data = json.loads(request.httprequest.data)
+        data = self._get_json_body()
         model = data.get("model")
         values = data.get("values", {})
 
         try:
             record = request.env[model].sudo().create(values)
             _logger.info("AI callback: created %s(%s)", model, record.id)
-            return {"success": True, "record_id": record.id}
+            return _json_response({"success": True, "record_id": record.id})
         except Exception as e:
             _logger.error("AI callback create failed: %s", str(e))
-            return {"error": str(e)}
+            return _json_response({"error": str(e)}, 500)
 
-    @http.route("/ai/callback/action", type="json", auth="none", methods=["POST"], csrf=False)
+    @http.route("/ai/callback/action", type="http", auth="none", methods=["POST"], csrf=False)
     def execute_action(self, **kwargs):
         """Execute an arbitrary method on a record (e.g. action_confirm on sale.order)."""
         if not self._check_auth():
-            return {"error": "Unauthorized"}
+            return _json_response({"error": "Unauthorized"}, 401)
 
-        data = json.loads(request.httprequest.data)
+        data = self._get_json_body()
         model = data.get("model")
         record_id = data.get("record_id")
         method = data.get("method")
@@ -116,13 +127,13 @@ class AiCallbackController(http.Controller):
         try:
             record = request.env[model].sudo().browse(record_id)
             if not record.exists():
-                return {"error": "Record not found"}
+                return _json_response({"error": "Record not found"}, 404)
             result = getattr(record, method)(*args)
             _logger.info("AI callback: %s.%s(%s)", model, method, record_id)
-            return {"success": True, "result": self._serialize(result)}
+            return _json_response({"success": True, "result": self._serialize(result)})
         except Exception as e:
             _logger.error("AI callback action failed: %s", str(e))
-            return {"error": str(e)}
+            return _json_response({"error": str(e)}, 500)
 
     def _serialize(self, value):
         if isinstance(value, (list, tuple)):

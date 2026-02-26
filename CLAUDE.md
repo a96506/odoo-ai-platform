@@ -178,3 +178,4 @@ alembic upgrade head
 - PostgreSQL credentials are sourced from env vars (POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB)
 - AI DB hostname is `ai-db` (must match in AI_DATABASE_URL)
 - deploy.sh validates .env placeholders before building
+- Odoo MCP server configured via `ODOO_MCP_URL` and `ODOO_MCP_TRANSPORT` env vars; API key stored in `ODOO_API_KEY`
