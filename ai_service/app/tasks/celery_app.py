@@ -3,6 +3,7 @@ Celery application configuration for async task processing.
 """
 
 from celery import Celery
+from celery.signals import worker_init
 
 from app.config import get_settings
 
@@ -68,4 +69,12 @@ celery_app.conf.update(
         },
     },
 )
+
+
+@worker_init.connect
+def on_worker_init(**kwargs):
+    from app.automations import init_automations
+    from app.models.audit import init_db
+    init_db()
+    init_automations()
 
