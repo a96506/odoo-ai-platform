@@ -34,6 +34,21 @@ LOG_LEVEL=INFO
 
 ---
 
+## Current Deployment Status
+
+| Component | Version | Status | Last Deployed |
+|-----------|---------|--------|---------------|
+| AI Service (FastAPI) | Phase 1 complete | healthy | 2026-02-26 |
+| Celery Worker | Phase 1 complete | running | 2026-02-26 |
+| Celery Beat | Phase 1 complete | running | 2026-02-26 |
+| Dashboard (Next.js) | Phase 1 complete | running | 2026-02-26 |
+| PostgreSQL | 15 | healthy | stable |
+| Redis | 7 (256MB) | healthy | stable |
+
+**Deployed features:** 10 original automations + 6 Phase 1 automations (dedup, credit, IDP, digest, cash flow, reports) + role-based dashboards + WebSocket + 15 API routers + 362 tests.
+
+---
+
 ## Dokploy / Traefik Deployment (Current)
 
 The platform is deployed as a **Docker Compose stack** managed by **Dokploy** on a Hetzner VPS (`65.21.62.16`). Traefik handles external routing — containers do NOT bind host ports.
@@ -44,12 +59,15 @@ The platform is deployed as a **Docker Compose stack** managed by **Dokploy** on
 |------|-------|
 | Server | Hetzner VPS `65.21.62.16` |
 | Orchestrator | Dokploy v0.27.1 (`dokploy.atmatasolutions.com`) |
-| Reverse Proxy | Traefik (auto-configured by Dokploy) |
+| Reverse Proxy | Traefik (auto-configured by Dokploy + manual dynamic config) |
 | Git Source | `https://github.com/a96506/odoo-ai-platform.git` (branch: `main`) |
 | Compose ID | `MFFNIydB-V76TrLCXo4x0` |
+| Compose Project Name | `compose-navigate-haptic-matrix-2qe6ph` |
 | AI API Domain | `odoo-ai-api-65-21-62-16.traefik.me` → ai-service:8000 |
 | Dashboard Domain | `odoo-ai-dash-65-21-62-16.traefik.me` → dashboard:3000 |
 | SSH Access | `ssh -i ~/.ssh/dokploy_ed25519 root@65.21.62.16` |
+| Code on Server | `/etc/dokploy/compose/compose-navigate-haptic-matrix-2qe6ph/code/` |
+| Traefik Config | `/etc/dokploy/traefik/dynamic/odoo-ai-platform.yml` |
 
 ### Critical: No Host Port Bindings
 
@@ -65,25 +83,43 @@ ports:
   - "8000:8000"
 ```
 
-### Deployment Steps
+### Deployment Steps (SSH — Primary Method)
 
 ```bash
 # 1. Push to main
 git push origin main
 
-# 2. Deploy via Dokploy API
+# 2. SSH into server, pull, build, and recreate
+ssh -i ~/.ssh/dokploy_ed25519 root@65.21.62.16
+
+cd /etc/dokploy/compose/compose-navigate-haptic-matrix-2qe6ph/code
+
+git pull origin main
+
+# CRITICAL: always use -p with the Dokploy project name (not the default "code")
+docker compose -p compose-navigate-haptic-matrix-2qe6ph build --no-cache ai-service dashboard
+docker compose -p compose-navigate-haptic-matrix-2qe6ph up -d --force-recreate ai-service celery-worker celery-beat dashboard
+
+# 3. Reconnect to Traefik overlay network (required after recreate)
+docker network connect dokploy-network compose-navigate-haptic-matrix-2qe6ph-ai-service-1
+docker network connect dokploy-network compose-navigate-haptic-matrix-2qe6ph-dashboard-1
+
+# 4. Verify endpoints
+curl -s http://odoo-ai-api-65-21-62-16.traefik.me/health
+curl -s -o /dev/null -w "%{http_code}" http://odoo-ai-dash-65-21-62-16.traefik.me/
+```
+
+### Deployment Steps (Dokploy API — Alternative)
+
+```bash
+# If you have a Dokploy API key:
 curl -sk -X POST "https://dokploy.atmatasolutions.com/api/compose.deploy" \
   -H "Content-Type: application/json" \
   -H "x-api-key: $DOKPLOY_API_KEY" \
   -d '{"composeId": "MFFNIydB-V76TrLCXo4x0"}'
-
-# 3. Monitor via SSH (wait for healthy)
-ssh -i ~/.ssh/dokploy_ed25519 root@65.21.62.16 \
-  "docker ps --format 'table {{.Names}}\t{{.Status}}' | grep compose-navigate"
-
-# 4. Verify endpoints
-curl -s http://odoo-ai-api-65-21-62-16.traefik.me/health
 ```
+
+Note: Dokploy API deploy handles Traefik labels and network automatically. The SSH method requires manual `docker network connect` (see Traefik Routing below).
 
 ### Post-Deploy: Run Alembic Migrations
 
@@ -112,9 +148,113 @@ curl -sk -X POST "https://dokploy.atmatasolutions.com/api/compose.update" \
 # Then redeploy to pick up changes
 ```
 
+### Traefik Routing (Critical)
+
+Traefik uses the `dokploy-network` (Docker Swarm overlay, attachable) for service discovery. When deploying via SSH (not Dokploy API), containers are only on the compose default network. **You must manually connect them to `dokploy-network`** or Traefik returns 404.
+
+Routing is configured via a file-based dynamic config at `/etc/dokploy/traefik/dynamic/odoo-ai-platform.yml`:
+
+```yaml
+http:
+  routers:
+    odoo-ai-api:
+      rule: Host(`odoo-ai-api-65-21-62-16.traefik.me`)
+      service: odoo-ai-api-service
+      entryPoints:
+        - web
+    odoo-ai-api-secure:
+      rule: Host(`odoo-ai-api-65-21-62-16.traefik.me`)
+      service: odoo-ai-api-service
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+    odoo-ai-dash:
+      rule: Host(`odoo-ai-dash-65-21-62-16.traefik.me`)
+      service: odoo-ai-dash-service
+      entryPoints:
+        - web
+    odoo-ai-dash-secure:
+      rule: Host(`odoo-ai-dash-65-21-62-16.traefik.me`)
+      service: odoo-ai-dash-service
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+  services:
+    odoo-ai-api-service:
+      loadBalancer:
+        servers:
+          - url: http://compose-navigate-haptic-matrix-2qe6ph-ai-service-1:8000
+        passHostHeader: true
+    odoo-ai-dash-service:
+      loadBalancer:
+        servers:
+          - url: http://compose-navigate-haptic-matrix-2qe6ph-dashboard-1:3000
+        passHostHeader: true
+```
+
+Traefik watches this directory and picks up changes automatically (no restart needed).
+
+**Verifying Traefik routing:**
+
+```bash
+# Check routers are loaded
+docker exec dokploy-traefik wget -qO- http://localhost:8080/api/http/routers | \
+  python3 -c "import sys,json; [print(r['name'], r['status']) for r in json.load(sys.stdin) if 'odoo-ai' in r['name']]"
+
+# Check backends are UP
+docker exec dokploy-traefik wget -qO- http://localhost:8080/api/http/services | \
+  python3 -c "import sys,json; [print(s['name'], s.get('serverStatus',{})) for s in json.load(sys.stdin) if 'odoo-ai' in s['name']]"
+```
+
 ---
 
 ## Troubleshooting
+
+### Traefik returns 404 after SSH deploy
+
+**Symptom:** Containers are running and healthy, but `curl https://odoo-ai-api-*.traefik.me/health` returns `404 page not found`.
+
+**Cause:** When deploying via SSH (not Dokploy API), containers are only on the compose default network. Traefik discovers services on `dokploy-network` (overlay).
+
+**Fix:**
+
+```bash
+docker network connect dokploy-network compose-navigate-haptic-matrix-2qe6ph-ai-service-1
+docker network connect dokploy-network compose-navigate-haptic-matrix-2qe6ph-dashboard-1
+```
+
+Also verify the Traefik dynamic config file exists at `/etc/dokploy/traefik/dynamic/odoo-ai-platform.yml` (see "Traefik Routing" section above).
+
+### Duplicate containers (wrong docker compose project name)
+
+**Symptom:** `docker ps` shows two sets of containers — old `compose-navigate-haptic-matrix-2qe6ph-*` AND new `code-*` containers.
+
+**Cause:** Running `docker compose up` from the code directory without `-p` uses the directory name (`code`) as the project name instead of Dokploy's project name.
+
+**Fix:**
+
+```bash
+# Remove the duplicate set
+docker compose -p code down
+
+# Always use the Dokploy project name
+docker compose -p compose-navigate-haptic-matrix-2qe6ph up -d --force-recreate
+```
+
+### Dashboard 502 Bad Gateway
+
+**Symptom:** AI API works fine but dashboard returns 502.
+
+**Cause:** Next.js standalone binds to `localhost` by default, making it unreachable from Traefik's overlay network. The `HOSTNAME=0.0.0.0` env var is required.
+
+**Fix:** Already fixed in `dashboard/Dockerfile` with `ENV HOSTNAME=0.0.0.0`. If the problem recurs, verify:
+
+```bash
+docker exec <dashboard-container> env | grep HOSTNAME
+# Should show: HOSTNAME=0.0.0.0 (NOT a container ID)
+```
 
 ### Container stuck in "Created" state
 
@@ -402,7 +542,7 @@ Redis is used as a transient broker. Data loss is acceptable (tasks will be re-q
 |---------|----------|---------------|
 | FastAPI (ai-service) | ~500 req/s | Not a bottleneck |
 | Celery Worker (4 threads) | ~4 concurrent tasks | >100 webhooks/min sustained |
-| Redis (128MB) | ~50K queued tasks | Memory limit hit with forecast caching |
+| Redis (256MB) | ~100K queued tasks | Memory limit hit with heavy pub/sub + forecast caching |
 | PostgreSQL | ~10K queries/s | Not a bottleneck for Phase 1 |
 | Claude API | ~60 req/min (rate limit) | >60 automations/minute sustained |
 
@@ -410,7 +550,7 @@ Redis is used as a transient broker. Data loss is acceptable (tasks will be re-q
 
 | Action | When | How |
 |--------|------|-----|
-| Increase Redis memory | Forecast caching, recon session memory | Set `maxmemory 512mb` in docker-compose |
+| Increase Redis memory | Heavy pub/sub + forecast + recon caching | Set `maxmemory 512mb` in docker-compose (currently 256mb) |
 | Add Celery worker | >100 webhooks/min or >4 concurrent Claude calls | Scale worker replicas: `docker compose up -d --scale celery-worker=2` |
 | Increase DB connections | >20 concurrent API requests | Adjust `pool_size` in SQLAlchemy engine |
 

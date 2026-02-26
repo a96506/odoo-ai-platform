@@ -422,3 +422,9 @@ This applies to: FastAPI, SQLAlchemy, Alembic, Pydantic, Celery, Anthropic SDK, 
 - Redis maxmemory increased from 128mb to 256mb; NEXT_PUBLIC_WS_URL and NEXT_PUBLIC_API_KEY env vars added to dashboard service
 - 19 automation handlers registered: 10 original + month_end + deduplication + credit + document_processing + daily_digest + cash_flow + report_builder + role_dashboard + websocket
 - 362 tests total (35 new for Sprint 5); full test suite passes
+- Dashboard Dockerfile requires `ENV HOSTNAME=0.0.0.0` — Next.js standalone binds to localhost by default, which is unreachable from Traefik's Docker overlay network
+- SSH deploys must use `-p compose-navigate-haptic-matrix-2qe6ph` with docker compose — omitting `-p` creates duplicate containers under project name `code`
+- After SSH deploy, containers must be manually connected to `dokploy-network`: `docker network connect dokploy-network <container>`
+- Traefik routing for the AI platform is defined in `/etc/dokploy/traefik/dynamic/odoo-ai-platform.yml` (file-based, not container labels)
+- Code on server lives at `/etc/dokploy/compose/compose-navigate-haptic-matrix-2qe6ph/code/`
+- Phase 1 fully deployed to production on 2026-02-26; all 6 services healthy
