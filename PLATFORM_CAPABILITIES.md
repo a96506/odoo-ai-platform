@@ -25,7 +25,7 @@ This pillar adds five capabilities: low-code automation builder, integration hub
 ### The Problem
 
 Every automation in our platform is hardcoded in Python. If a business wants:
-- "When a quotation exceeds $10K, notify the CFO on WhatsApp" -- they need a developer
+- "When a quotation exceeds $10K, notify the CFO on Slack" -- they need a developer
 - "When a product drops below 50 units, create a PO with Vendor X" -- they need a developer
 - "When a support ticket is marked urgent, assign to Agent Y" -- they need a developer
 
@@ -41,7 +41,7 @@ A visual rule builder in the dashboard where business users create custom automa
 |-----------|---------|
 | **Triggers** | Record created, record updated, field changed, date reached, threshold crossed, scheduled time |
 | **Conditions** | Field equals/contains/greater than, AND/OR logic, current user role, time of day, day of week |
-| **Actions** | Send notification (WhatsApp/Slack/email), create record, update field, assign user, call AI analysis, approve/reject, create task, add note |
+| **Actions** | Send notification (Slack/email), create record, update field, assign user, call AI analysis, approve/reject, create task, add note |
 | **Templates** | Pre-built common automations users can enable with one click |
 
 **User Interface:**
@@ -53,7 +53,7 @@ AND [condition builder]
   [field: Amount Total] [operator: is greater than] [value: 10000]
   AND [field: Customer Credit] [operator: is less than] [value: 5000]
 THEN [action list]
-  1. [Send WhatsApp] to [CFO] with message [template: High Value Order Alert]
+  1. [Send Slack] to [CFO] with message [template: High Value Order Alert]
   2. [Create Task] assigned to [Credit Manager] with title "Review credit for {customer}"
   3. [Update Field] set [Sales Order.Tag] to "High Value - Credit Review"
 ```
@@ -64,8 +64,8 @@ THEN [action list]
 |----------|---------|--------|
 | Large order alert | SO > threshold | Notify manager |
 | Low stock reorder | Product qty < reorder point | Create PO draft |
-| Overdue invoice escalation | Invoice past due > 30 days | Notify account manager + send WhatsApp to customer |
-| New lead notification | Lead created from website | WhatsApp to sales rep + AI lead scoring |
+| Overdue invoice escalation | Invoice past due > 30 days | Notify account manager + email customer |
+| New lead notification | Lead created from website | Slack to sales rep + AI lead scoring |
 | Expense policy check | Expense > limit | Route to department head instead of direct manager |
 | Delivery delay alert | Picking past scheduled date | Notify warehouse manager + customer |
 
@@ -73,7 +73,7 @@ THEN [action list]
 
 - Rules stored as JSON in AI database (`automation_rule_v2` table)
 - Rule engine evaluates conditions on webhook events (already received from Odoo)
-- Actions executed through existing infrastructure (WhatsApp API, Slack API, Odoo XML-RPC)
+- Actions executed through existing infrastructure (Slack API, SMTP email, Odoo XML-RPC)
 - React-based visual builder using `react-flow` or similar for drag-and-drop
 - Test mode: simulates rule execution against recent events without taking action
 
@@ -83,7 +83,7 @@ THEN [action list]
 |---------|----------------------|---------------------|
 | Interface | Form with Python code | Visual drag-and-drop |
 | Conditions | Odoo domain syntax | Human-readable condition builder |
-| Actions | Limited (set field, create activity, send email) | Full action library (WhatsApp, Slack, AI analysis, multi-step) |
+| Actions | Limited (set field, create activity, send email) | Full action library (Slack, email, AI analysis, multi-step) |
 | AI integration | None | Can invoke AI analysis as an action |
 | Cross-module | Per-model only | Can chain across models |
 | Testing | No test mode | Simulate against recent events |
@@ -100,7 +100,7 @@ Our AI platform only talks to Odoo. In reality, businesses need data flowing bet
 - Shipping carriers (tracking, label generation, delivery confirmation)
 - Payment gateways (online payments from portals and invoices)
 - Government portals (VAT filing, e-invoicing submission, customs)
-- Communication platforms (WhatsApp, Slack, Teams -- covered in Pillar 4)
+- Communication platforms (Slack, Teams -- covered in Pillar 4)
 
 Currently, all of this is manual: download bank statement CSV, import into Odoo; check tracking on carrier website, update Odoo manually; file taxes in government portal, no connection to Odoo.
 

@@ -19,13 +19,6 @@ class TestSettings:
         s = Settings(odoo_api_key="", odoo_password="pw")
         assert s.odoo_auth == "pw"
 
-    def test_whatsapp_disabled_by_default(self, settings):
-        assert settings.whatsapp_enabled is False
-
-    def test_whatsapp_enabled_when_configured(self):
-        s = Settings(whatsapp_api_url="https://wa.api", whatsapp_api_token="tok")
-        assert s.whatsapp_enabled is True
-
     def test_slack_disabled_by_default(self, settings):
         assert settings.slack_enabled is False
 

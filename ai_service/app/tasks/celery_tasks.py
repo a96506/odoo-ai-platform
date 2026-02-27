@@ -27,6 +27,31 @@ def _publish_dashboard_event(event_type: str, data: dict, role: str | None = Non
         pass
 
 
+def _send_slack_approval_request(audit: "AuditLog"):
+    """Send a Slack interactive message for actions needing approval."""
+    try:
+        from app.config import get_settings
+        from app.notifications.slack import SlackChannel
+
+        settings = get_settings()
+        if not settings.slack_enabled or not settings.slack_default_channel:
+            return
+
+        slack = SlackChannel()
+        slack.send_approval_request(
+            channel=settings.slack_default_channel,
+            audit_log_id=audit.id,
+            automation_type=str(audit.automation_type),
+            action_name=audit.action_name,
+            model=audit.odoo_model,
+            record_id=audit.odoo_record_id or 0,
+            confidence=audit.confidence or 0.0,
+            reasoning=audit.ai_reasoning or "",
+        )
+    except Exception as exc:
+        logger.warning("slack_approval_request_failed", error=str(exc))
+
+
 def _is_automation_enabled(session, automation_type: str, action_name: str | None = None) -> bool:
     """Check if any matching automation rule is enabled."""
     query = session.query(AutomationRule).filter(
@@ -85,10 +110,13 @@ def process_webhook_event(self, event_id: int):
             event.processing_completed_at = datetime.utcnow()
 
             if handler and 'audit' in dir() and audit:
+                event_type = "automation_completed" if audit.status == ActionStatus.EXECUTED else "approval_needed"
                 _publish_dashboard_event(
-                    "automation_completed" if audit.status == ActionStatus.EXECUTED else "approval_needed",
+                    event_type,
                     {"audit_log_id": audit.id, "automation_type": handler.automation_type, "action": audit.action_name},
                 )
+                if audit.status == ActionStatus.PENDING:
+                    _send_slack_approval_request(audit)
 
         logger.info("webhook_processed", event_id=event_id)
 
@@ -438,12 +466,24 @@ def run_daily_digest():
 
                 channels = result.get("channels", ["email"])
                 config = DEFAULT_DIGEST_CONFIG.get(role, {})
+                sent_channels = []
 
                 for channel in channels:
-                    if channel == "email":
-                        pass
+                    recipient = ""
+                    if channel == "slack":
+                        from app.config import get_settings as _gs
+                        recipient = _gs().slack_default_channel
+                    delivered = automation.deliver_digest(
+                        role=role,
+                        channel=channel,
+                        recipient=recipient,
+                        content=result["content"],
+                    )
+                    if delivered:
+                        sent_channels.append(channel)
 
-                digest.channels_sent = []
+                digest.channels_sent = sent_channels
+                digest.delivered = bool(sent_channels)
 
             audit = AuditLog(
                 automation_type="reporting",
@@ -625,3 +665,176 @@ def run_scheduled_reports():
 
     except Exception as exc:
         logger.error("scheduled_reports_failed", error=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — Agent Workflow Execution
+# ---------------------------------------------------------------------------
+
+@celery_app.task(bind=True, max_retries=2)
+def run_agent_workflow(self, agent_type: str, trigger_type: str, trigger_id: str, initial_state: dict):
+    """Execute a multi-step agent workflow via the Agent Orchestrator."""
+    try:
+        from app.agents.orchestrator import get_orchestrator
+
+        orchestrator = get_orchestrator()
+        result = orchestrator.run_agent(
+            agent_type=agent_type,
+            trigger_type=trigger_type,
+            trigger_id=trigger_id,
+            initial_state=initial_state,
+        )
+
+        _publish_dashboard_event("agent_completed", {
+            "agent_type": agent_type,
+            "run_id": result.get("run_id"),
+            "status": result.get("status"),
+            "total_steps": result.get("total_steps", 0),
+        })
+
+        logger.info(
+            "agent_workflow_complete",
+            agent_type=agent_type,
+            run_id=result.get("run_id"),
+            status=result.get("status"),
+            steps=result.get("total_steps", 0),
+        )
+
+    except Exception as exc:
+        logger.error("agent_workflow_failed", agent_type=agent_type, error=str(exc))
+        raise self.retry(exc=exc, countdown=120)
+
+
+@celery_app.task
+def resume_agent_workflow(run_id: int, event_data: dict):
+    """Resume a suspended agent after receiving an external event (e.g. approval)."""
+    try:
+        from app.agents.orchestrator import get_orchestrator
+
+        orchestrator = get_orchestrator()
+        result = orchestrator.resume_agent(run_id=run_id, event_data=event_data)
+
+        _publish_dashboard_event("agent_completed", {
+            "run_id": run_id,
+            "status": result.get("status"),
+        })
+
+        logger.info("agent_resumed", run_id=run_id, status=result.get("status"))
+
+    except Exception as exc:
+        logger.error("agent_resume_failed", run_id=run_id, error=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — Supply Chain Intelligence
+# ---------------------------------------------------------------------------
+
+@celery_app.task
+def run_supplier_risk_scoring():
+    """Daily recalculation of risk scores for all vendors."""
+    try:
+        from app.automations.supply_chain import SupplyChainAutomation
+
+        with get_db_session() as session:
+            if not _is_automation_enabled(session, "supply_chain", "risk_scoring"):
+                logger.info("supplier_risk_scoring_skipped_disabled")
+                return
+
+        automation = SupplyChainAutomation()
+        result = automation.calculate_all_risk_scores()
+
+        with get_db_session() as session:
+            audit = AuditLog(
+                automation_type="supply_chain",
+                action_name="daily_risk_scoring",
+                odoo_model="res.partner",
+                odoo_record_id=0,
+                status=ActionStatus.EXECUTED,
+                ai_reasoning=f"Scored {result['vendors_scored']} vendors: {result['critical']} critical, {result['elevated']} elevated",
+                output_data=result,
+                executed_at=datetime.utcnow(),
+            )
+            session.add(audit)
+
+        _publish_dashboard_event("alert", {
+            "type": "supply_chain_risk_update",
+            "vendors_scored": result["vendors_scored"],
+            "critical": result["critical"],
+        })
+
+        logger.info("supplier_risk_scoring_complete", **result)
+
+    except Exception as exc:
+        logger.error("supplier_risk_scoring_failed", error=str(exc))
+
+
+@celery_app.task
+def run_delivery_degradation_check():
+    """Check for worsening delivery patterns across vendors (every 6 hours)."""
+    try:
+        from app.automations.supply_chain import SupplyChainAutomation
+
+        with get_db_session() as session:
+            if not _is_automation_enabled(session, "supply_chain", "disruption_prediction"):
+                logger.info("delivery_degradation_check_skipped_disabled")
+                return
+
+        automation = SupplyChainAutomation()
+        predictions = automation.detect_delivery_degradation()
+
+        if predictions:
+            with get_db_session() as session:
+                audit = AuditLog(
+                    automation_type="supply_chain",
+                    action_name="delivery_degradation_check",
+                    odoo_model="res.partner",
+                    odoo_record_id=0,
+                    status=ActionStatus.EXECUTED,
+                    ai_reasoning=f"Detected {len(predictions)} delivery degradation patterns",
+                    output_data={"predictions": len(predictions)},
+                    executed_at=datetime.utcnow(),
+                )
+                session.add(audit)
+
+            _publish_dashboard_event("alert", {
+                "type": "supply_chain_degradation",
+                "predictions": len(predictions),
+            })
+
+        logger.info("delivery_degradation_check_complete", predictions=len(predictions))
+
+    except Exception as exc:
+        logger.error("delivery_degradation_check_failed", error=str(exc))
+
+
+@celery_app.task
+def run_single_source_scan():
+    """Weekly scan identifying products with only one supplier."""
+    try:
+        from app.automations.supply_chain import SupplyChainAutomation
+
+        with get_db_session() as session:
+            if not _is_automation_enabled(session, "supply_chain", "single_source_detection"):
+                logger.info("single_source_scan_skipped_disabled")
+                return
+
+        automation = SupplyChainAutomation()
+        result = automation.detect_single_source_risks()
+
+        with get_db_session() as session:
+            audit = AuditLog(
+                automation_type="supply_chain",
+                action_name="single_source_scan",
+                odoo_model="product.template",
+                odoo_record_id=0,
+                status=ActionStatus.EXECUTED,
+                ai_reasoning=f"Found {result['single_source_products']} single-source products, total revenue at risk: {result.get('total_revenue_at_risk', 0):.2f}",
+                output_data=result,
+                executed_at=datetime.utcnow(),
+            )
+            session.add(audit)
+
+        logger.info("single_source_scan_complete", products=result["single_source_products"])
+
+    except Exception as exc:
+        logger.error("single_source_scan_failed", error=str(exc))

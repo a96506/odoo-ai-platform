@@ -1,7 +1,7 @@
 # Communication & Portals -- Pillar 4 Detail Document
 
 **Research date:** February 2026
-**Sources:** WhatsApp Business API docs, Meta for Developers, Frappe WhatsApp, SAP B2B Portal, Acumatica Portal, CommerceBuild, Manhattan, Chakra Chat, n8n integrations
+**Sources:** SAP B2B Portal, Acumatica Portal, CommerceBuild, Manhattan, n8n integrations
 **Referenced by:** [MASTER_PLAN.md](MASTER_PLAN.md) -- Pillar 4
 
 ---
@@ -10,14 +10,12 @@
 
 Odoo communicates with the outside world almost exclusively through email. This is a problem:
 
-- Email has a 20% open rate. WhatsApp has 98%.
-- Approval requests sit in email inboxes for days. A WhatsApp message gets read in minutes.
-- Payment reminder emails are ignored. WhatsApp payment reminders get 5x higher response rates.
+- Approval requests sit in email inboxes for days. A Slack message gets read in minutes.
 - Customers call or email to ask "where's my order?" because there's no self-service portal.
 - Vendors email delivery updates that someone must manually enter into Odoo.
 - Odoo's built-in Discuss module is underpowered -- teams use Slack/Teams anyway.
 
-This pillar adds three capabilities: multi-channel messaging, customer self-service portal, and vendor self-service portal.
+This pillar adds three capabilities: multi-channel messaging (Slack and email), customer self-service portal, and vendor self-service portal.
 
 ---
 
@@ -27,10 +25,8 @@ This pillar adds three capabilities: multi-channel messaging, customer self-serv
 
 Every notification, approval request, collection message, and status update in Odoo goes through email. Email is slow, noisy, and increasingly ignored for operational messages. Meanwhile:
 
-- WhatsApp Business API supports interactive messages, payment reminders, and order management
 - Slack/Teams are where internal teams already collaborate
-- SMS remains the most reliable channel for critical alerts
-- ERPNext already has a native WhatsApp integration (Frappe WhatsApp)
+- Real-time Slack notifications get faster response times than email
 
 ### What We Build
 
@@ -40,52 +36,14 @@ A multi-channel messaging layer that routes notifications through the right chan
 
 | Message Type | Primary Channel | Fallback | Why |
 |-------------|----------------|----------|-----|
-| Payment reminders / collection | WhatsApp | Email | 98% open rate, interactive payment links |
+| Payment reminders / collection | Email | -- | Standard business communication |
 | Approval requests (internal) | Slack / Teams | Email | Where teams already work, one-click approve |
-| Order confirmations (customer) | WhatsApp | Email | Instant delivery, read receipts |
-| Delivery updates | WhatsApp + SMS | Email | Time-sensitive, mobile-first |
+| Order confirmations (customer) | Email | -- | Document delivery with confirmation |
+| Delivery updates | Email | -- | Time-sensitive status updates |
 | Daily AI digest (internal) | Slack / Email | In-app | Morning briefing for each role |
-| Critical alerts (stock-out, fraud) | SMS + Slack | WhatsApp + Email | Must not be missed |
-| Follow-up reminders (sales) | WhatsApp | Email | Personal touch, high engagement |
-| Invoice delivery | WhatsApp + Email | Email only | Document delivery with payment link |
-
-### WhatsApp Business API Integration
-
-**Capabilities we implement:**
-
-| Feature | Description |
-|---------|------------|
-| Template messages | Pre-approved message templates for invoices, reminders, confirmations |
-| Interactive messages | Buttons for "Pay Now", "Approve", "Reject", "View Details" |
-| Order status messages | Real-time order/delivery status updates |
-| Payment reminders | Payment links embedded in WhatsApp messages |
-| Two-way messaging | Customer replies routed back to Odoo chatter/helpdesk |
-| Media messages | Send PDF invoices, delivery photos, product catalogs |
-| Read receipts | Track message delivery and read status for collection follow-up |
-
-**Implementation:**
-- WhatsApp Business API via Meta Cloud API (hosted by Meta, no server setup)
-- Message templates submitted for Meta approval (required for outbound business messages)
-- Webhook receiver for inbound customer replies
-- Phone number verification and business profile setup
-
-**Template Examples:**
-
-```
-[Invoice Reminder]
-Hi {{customer_name}}, invoice {{invoice_number}} for {{amount}} {{currency}}
-is due on {{due_date}}. 
-
-[Pay Now] [View Invoice] [Contact Us]
-```
-
-```
-[Approval Request]
-{{approver_name}}, a {{document_type}} from {{requester}} needs your approval:
-{{description}} -- Amount: {{amount}} {{currency}}
-
-[Approve] [Reject] [View Details]
-```
+| Critical alerts (stock-out, fraud) | Slack | Email | Must not be missed, instant visibility |
+| Follow-up reminders (sales) | Email | -- | Standard outreach channel |
+| Invoice delivery | Email | -- | Document delivery with payment link |
 
 ### Slack / Microsoft Teams Integration
 
@@ -101,25 +59,16 @@ is due on {{due_date}}.
 - Teams: Microsoft Graph API + Teams bot framework
 - Both: webhook-based event delivery from AI service
 
-### SMS Integration
-
-For critical alerts only (cost-conscious):
-- Twilio or equivalent SMS gateway
-- Used for: stock-out alerts, fraud detection, system failures, approval escalation (after 24h no response on other channels)
-
 ### Architecture
 
 ```
 Odoo Event -> AI Service -> Channel Router -> {
-  WhatsApp Business API (external customers/vendors)
   Slack API (internal team - Slack orgs)
   Teams API (internal team - Teams orgs)  
-  Twilio SMS (critical alerts)
-  SMTP Email (fallback, document delivery)
+  SMTP Email (external customers/vendors, document delivery)
 }
 
 Inbound replies:
-  WhatsApp webhook -> AI Service -> route to Odoo chatter/helpdesk
   Slack interaction -> AI Service -> process approval/command
 ```
 
@@ -253,22 +202,16 @@ When a vendor uploads an invoice through the portal:
 
 | Deliverable | Phase | Dependencies |
 |------------|-------|-------------|
-| WhatsApp notification integration | Phase 1 | WhatsApp Business API account, Meta template approval |
 | Slack integration | Phase 1 | Slack app creation, bot token |
 | Customer portal (MVP on Odoo portal) | Phase 3 | Payment gateway integration |
 | Vendor portal (MVP on Odoo portal) | Phase 3 | IDP (Pillar 5C) for invoice upload |
-| SMS critical alerts | Phase 3 | Twilio or equivalent account |
 | Portal UX upgrade (Next.js) | Phase 4 | If Odoo portal UX is insufficient |
 
 ---
 
 ## Research Sources
 
-- WhatsApp Business API: Meta Cloud API documentation, order_details/order_status messages
-- Frappe WhatsApp: Native ERPNext integration (two-way messaging, WhatsApp Flows, webhook support)
-- Chakra Chat: ERP-WhatsApp integration for automated invoices and payment reminders
 - SAP B2B Self-Service Portal: Order, invoice, payment, claims management features
 - Acumatica Customer Self-Service Portal: ERP-integrated portal architecture
 - CommerceBuild: B2B Customer Portal for real-time self-service
 - Manhattan: B2B order management architecture for ERP augmentation
-- n8n: Visual workflow builder for ERPNext-WhatsApp integration

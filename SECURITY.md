@@ -96,7 +96,6 @@ Phase 1+: Replace with proper session-based auth or integrate with Odoo's auth s
 | `AI_SECRET_KEY` | `.env` on server | Every 90 days |
 | `WEBHOOK_SECRET` | `.env` on server + Odoo `ai.config` | Every 90 days |
 | `POSTGRES_PASSWORD` | `.env` on server | Every 90 days |
-| `WHATSAPP_API_TOKEN` | `.env` on server | Per Meta's policy |
 | `SLACK_BOT_TOKEN` | `.env` on server | When compromised |
 | `SMTP_PASSWORD` | `.env` on server | Every 90 days |
 

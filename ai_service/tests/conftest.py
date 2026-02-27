@@ -67,6 +67,7 @@ def client(db_session):
     with (
         patch("app.main.init_db"),
         patch("app.main.init_automations"),
+        patch("app.main.init_agents", create=True),
         patch("app.main.seed_default_rules"),
         patch("app.tasks.celery_tasks.process_webhook_event.delay"),
         patch("app.tasks.celery_tasks.execute_approved_action.delay"),

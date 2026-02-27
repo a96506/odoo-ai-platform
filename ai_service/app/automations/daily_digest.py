@@ -182,8 +182,24 @@ class DailyDigestAutomation(BaseAutomation):
             html = self._format_digest_html(role, content)
             return self.notify("email", recipient, subject, body, html=html)
 
+        if channel == "slack":
+            return self._deliver_via_slack(role, recipient, content)
+
         logger.warning("digest_channel_not_available", channel=channel, role=role)
         return False
+
+    def _deliver_via_slack(
+        self, role: str, recipient: str, content: dict[str, Any]
+    ) -> bool:
+        """Deliver digest as a rich Block Kit message in Slack."""
+        try:
+            from app.notifications.slack import SlackChannel
+
+            slack = SlackChannel()
+            return slack.send_digest(channel=recipient, role=role, content=content)
+        except Exception as exc:
+            logger.error("slack_digest_delivery_failed", role=role, error=str(exc))
+            return False
 
     # ------------------------------------------------------------------
     # Data aggregation per role

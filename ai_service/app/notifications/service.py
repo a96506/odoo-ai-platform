@@ -6,7 +6,6 @@ Usage:
     svc = get_notification_service()
     svc.send("email", "user@example.com", "Subject", "Body text")
     svc.send("slack", "#alerts", "Alert", "Something happened")
-    svc.send("whatsapp", "+1234567890", "", "Your order shipped")
 """
 
 from typing import Any
@@ -16,7 +15,6 @@ import structlog
 from app.notifications.base import NotificationChannel
 from app.notifications.email import EmailChannel
 from app.notifications.slack import SlackChannel
-from app.notifications.whatsapp import WhatsAppChannel
 
 logger = structlog.get_logger()
 
@@ -27,7 +25,7 @@ class NotificationService:
         self._register_defaults()
 
     def _register_defaults(self):
-        for cls in (EmailChannel, SlackChannel, WhatsAppChannel):
+        for cls in (EmailChannel, SlackChannel):
             channel = cls()
             self._channels[channel.channel_name] = channel
 
@@ -79,8 +77,8 @@ class NotificationService:
     ) -> dict[str, bool]:
         """
         Send the same message across multiple channels.
-        recipient_map: {"email": "user@x.com", "slack": "#channel", "whatsapp": "+123"}
-        Returns: {"email": True, "slack": True, "whatsapp": False}
+        recipient_map: {"email": "user@x.com", "slack": "#channel"}
+        Returns: {"email": True, "slack": True}
         """
         results = {}
         for channel, recipient in recipient_map.items():

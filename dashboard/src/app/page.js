@@ -11,6 +11,8 @@ import RoleSwitcher from "../components/RoleSwitcher";
 import CFODashboard from "../components/CFODashboard";
 import SalesDashboard from "../components/SalesDashboard";
 import WarehouseDashboard from "../components/WarehouseDashboard";
+import AgentDashboard from "../components/AgentDashboard";
+import SupplyChainDashboard from "../components/SupplyChainDashboard";
 import useWebSocket from "../hooks/useWebSocket";
 import { getApiUrl, fetchApiSafe } from "../lib/api";
 
@@ -67,7 +69,9 @@ export default function Dashboard() {
     if (
       lastMessage.type === "automation_completed" ||
       lastMessage.type === "approval_needed" ||
-      lastMessage.type === "forecast_updated"
+      lastMessage.type === "forecast_updated" ||
+      lastMessage.type === "agent_completed" ||
+      lastMessage.type === "alert"
     ) {
       fetchData();
     }
@@ -102,6 +106,8 @@ export default function Dashboard() {
     { id: "dashboard", label: activeRole === "overview" ? "Overview" : `${activeRole.toUpperCase()} Dashboard` },
     { id: "chat", label: "Chat with ERP" },
     { id: "insights", label: "Intelligence" },
+    { id: "agents", label: "AI Agents" },
+    { id: "supply-chain", label: "Supply Chain" },
     { id: "approvals", label: `Approvals (${pendingApprovals.length})` },
     { id: "logs", label: "Audit Log" },
     { id: "rules", label: "Automation Rules" },
@@ -187,6 +193,8 @@ export default function Dashboard() {
         {activeTab === "dashboard" && renderDashboard()}
         {activeTab === "chat" && <ChatInterface apiUrl={API_URL} />}
         {activeTab === "insights" && <InsightsPanel apiUrl={API_URL} />}
+        {activeTab === "agents" && <AgentDashboard />}
+        {activeTab === "supply-chain" && <SupplyChainDashboard />}
         {activeTab === "approvals" && (
           <ApprovalQueue approvals={pendingApprovals} onApprove={handleApprove} />
         )}

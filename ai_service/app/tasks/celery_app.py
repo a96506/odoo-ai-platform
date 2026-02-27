@@ -39,6 +39,10 @@ celery_app.conf.update(
         "app.tasks.celery_tasks.run_cash_flow_forecast": {"queue": "scheduled"},
         "app.tasks.celery_tasks.run_forecast_accuracy_check": {"queue": "scheduled"},
         "app.tasks.celery_tasks.run_scheduled_reports": {"queue": "scheduled"},
+        "app.tasks.celery_tasks.run_agent_workflow": {"queue": "automations"},
+        "app.tasks.celery_tasks.run_supplier_risk_scoring": {"queue": "scheduled"},
+        "app.tasks.celery_tasks.run_delivery_degradation_check": {"queue": "scheduled"},
+        "app.tasks.celery_tasks.run_single_source_scan": {"queue": "scheduled"},
     },
     beat_schedule={
         "scan-pending-reconciliations": {
@@ -117,6 +121,22 @@ celery_app.conf.update(
             "schedule": 3600.0,
             "options": {"expires": 1800},
         },
+        # Phase 2 — Supply Chain Intelligence
+        "daily-supplier-risk-scoring": {
+            "task": "app.tasks.celery_tasks.run_supplier_risk_scoring",
+            "schedule": 86400.0,
+            "options": {"expires": 43200},
+        },
+        "delivery-degradation-check": {
+            "task": "app.tasks.celery_tasks.run_delivery_degradation_check",
+            "schedule": 21600.0,
+            "options": {"expires": 10800},
+        },
+        "weekly-single-source-scan": {
+            "task": "app.tasks.celery_tasks.run_single_source_scan",
+            "schedule": 604800.0,
+            "options": {"expires": 86400},
+        },
     },
 )
 
@@ -124,7 +144,9 @@ celery_app.conf.update(
 @worker_init.connect
 def on_worker_init(**kwargs):
     from app.automations import init_automations
+    from app.agents import init_agents
     from app.models.audit import init_db
     init_db()
     init_automations()
+    init_agents()
 

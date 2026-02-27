@@ -47,12 +47,12 @@
 
 ### Communication (Pillar 4A)
 
-- [ ] 1.9 **WhatsApp/Slack notification integration** -- WhatsApp Business API for payment reminders, order confirmations, approval requests, delivery updates (98% open rate); Slack integration for internal approvals, AI alerts, daily digest; channel routing logic (urgency + recipient preference + message type); template message system
+- [x] 1.9 **Slack notification integration** -- Block Kit rich messages (approval requests, alerts, automation results, daily digest); interactive approve/reject buttons with Slack interaction endpoint; Slack signature verification; digest delivery via Slack; auto-notification on pending approvals; channel routing (urgency + message type); template system for all automation events
 
 ### Dashboard & UX (Pillars 2B, 2C)
 
 - [x] 1.10 **Role-based AI dashboards** -- personalized views per role (CFO: cash flow + P&L + AR/AP + close status; Sales: pipeline + conversion + at-risk deals + quota; Warehouse: stock levels + reorder alerts + shipments); real-time WebSocket updates via Redis pub/sub; recharts integration; role switching with localStorage persistence
-- [x] 1.11 **Proactive AI daily digest** -- AI-curated morning briefing per user; what needs attention today (overdue items, pending approvals, at-risk deals); key metrics vs yesterday; anomalies detected overnight; delivery via preferred channel (email/WhatsApp/Slack/in-app)
+- [x] 1.11 **Proactive AI daily digest** -- AI-curated morning briefing per user; what needs attention today (overdue items, pending approvals, at-risk deals); key metrics vs yesterday; anomalies detected overnight; delivery via preferred channel (email/Slack/in-app)
 
 ### Phase 1 Infrastructure
 
@@ -65,14 +65,14 @@
 
 ---
 
-## Phase 2: Intelligence & UX -- NOT STARTED
+## Phase 2: Intelligence & UX -- IN PROGRESS (Track A complete)
 
 > Goal: Upgrade AI architecture, fix the biggest UX pain points, add supply chain intelligence.
 > Detail docs: [AGENTIC_AI_ARCHITECTURE.md](AGENTIC_AI_ARCHITECTURE.md), [ODOO_UX_PAIN_POINTS.md](ODOO_UX_PAIN_POINTS.md), [SUPPLY_CHAIN_INTELLIGENCE.md](SUPPLY_CHAIN_INTELLIGENCE.md)
 
 ### Agentic AI (Pillar 1C)
 
-- [ ] 2.1 **Agentic AI architecture upgrade** -- install LangGraph; build BaseAgent class alongside BaseAutomation; implement agent state persistence (Redis + PostgreSQL); agent_run/agent_step/agent_decision DB tables; build first 3 agents: CollectionAgent, ProcureToPayAgent, MonthEndCloseAgent; dashboard agent run visualization; guardrails (token budget, step limit, loop detection, EU AI Act audit trail)
+- [x] 2.1 **Agentic AI architecture upgrade** -- install LangGraph; build BaseAgent class alongside BaseAutomation; implement agent state persistence (Redis + PostgreSQL); agent_run/agent_step/agent_decision DB tables; build first 3 agents: CollectionAgent, ProcureToPayAgent, MonthEndCloseAgent; dashboard agent run visualization; guardrails (token budget, step limit, loop detection, EU AI Act audit trail)
 
 ### UX Day-1 Fixes (Pillar 2A)
 
@@ -83,15 +83,15 @@
 
 ### Finance Intelligence (Pillar 3B)
 
-- [ ] 2.6 **Continuous close capabilities** -- upgrade month-end closing assistant to event-driven continuous reconciliation; real-time transaction matching as subledger movements occur; anomaly detection (Benford's Law, isolation forests, Z-score); instant financial statement regeneration; soft close any day
+- [x] 2.6 **Continuous close capabilities** -- upgrade month-end closing assistant to event-driven continuous reconciliation; real-time transaction matching as subledger movements occur; anomaly detection (Benford's Law, isolation forests, Z-score); instant financial statement regeneration; soft close any day
 
 ### AI Capabilities (Pillar 1D)
 
-- [ ] 2.7 **AI onboarding assistant** -- contextual help ("How do I set up fiscal positions?" -> step-by-step guide with direct links); proactive tips based on user behavior; interactive setup wizards for first-time module configuration; feature discovery suggestions
+- [x] 2.7 **AI onboarding assistant** -- contextual help ("How do I set up fiscal positions?" -> step-by-step guide with direct links); proactive tips based on user behavior; interactive setup wizards for first-time module configuration; feature discovery suggestions
 
 ### Supply Chain (Pillar 6A)
 
-- [ ] 2.8 **Supply chain risk intelligence** -- supplier risk scoring (7 weighted factors: delivery, quality, price, financial health, geographic, dependency, responsiveness); delivery delay prediction (2-6 weeks ahead); single-source risk detection; supply chain alerts; alternative supplier auto-suggestion; procurement dashboard
+- [x] 2.8 **Supply chain risk intelligence** -- supplier risk scoring (7 weighted factors: delivery, quality, price, financial health, geographic, dependency, responsiveness); delivery delay prediction (2-6 weeks ahead); single-source risk detection; supply chain alerts; alternative supplier auto-suggestion; procurement dashboard
 
 ### UX Improvements (Pillar 2A, 2D)
 
@@ -100,10 +100,10 @@
 
 ### Phase 2 Infrastructure
 
-- [ ] 2.11 **Add LangGraph dependencies** -- langgraph, langgraph-checkpoint-postgres, langgraph-checkpoint-redis
+- [x] 2.11 **Add LangGraph dependencies** -- langgraph, langgraph-checkpoint-postgres, langgraph-checkpoint-redis
 - [ ] 2.12 **Odoo frontend modules** -- create separate installable Odoo modules for: global search widget, dark mode theme, Customer 360 view, activity center, auto-save feedback, notification intelligence
-- [ ] 2.13 **Expand database schema** -- agent_run, agent_step, agent_decision, agent_suspension, supplier_risk_score, supplier_risk_factor, disruption_prediction, supply_chain_alert, alternative_supplier_map
-- [ ] 2.14 **New Celery beat tasks** -- calculate_supplier_risk_scores (daily), detect_delivery_degradation (every 6 hours), single_source_risk_scan (weekly)
+- [x] 2.13 **Expand database schema** -- agent_run, agent_step, agent_decision, agent_suspension, supplier_risk_score, supplier_risk_factor, disruption_prediction, supply_chain_alert, alternative_supplier_map
+- [x] 2.14 **New Celery beat tasks** -- calculate_supplier_risk_scores (daily), detect_delivery_degradation (every 6 hours), single_source_risk_scan (weekly)
 
 ---
 
@@ -183,8 +183,8 @@
 |-------|-------|--------|
 | Phase 0: Foundation | 6 | COMPLETE |
 | Phase 1: Sprint 0 Foundation | 8 | COMPLETE |
-| Phase 1: Core AI Expansion | 17 | COMPLETE (16/17 done, 1.9 deferred) |
-| Phase 2: Intelligence & UX | 14 | Not started |
+| Phase 1: Core AI Expansion | 17 | COMPLETE (17/17) |
+| Phase 2: Intelligence & UX | 14 | Track A complete (6/14 done) |
 | Phase 3: Platform & Portals | 12 | Not started |
 | Phase 4: Scale & Polish | 17 | Not started |
-| **TOTAL** | **74** | **30 done, 44 remaining** |
+| **TOTAL** | **74** | **37 done, 37 remaining** |

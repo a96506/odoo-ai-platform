@@ -38,11 +38,6 @@ class Settings(BaseSettings):
 
     # --- Phase 1 foundations (all optional, disabled by default) ---
 
-    # WhatsApp Business API
-    whatsapp_api_url: str = ""
-    whatsapp_api_token: str = ""
-    whatsapp_phone_number_id: str = ""
-
     # Slack
     slack_bot_token: str = ""
     slack_signing_secret: str = ""
@@ -64,15 +59,19 @@ class Settings(BaseSettings):
     idp_max_pages: int = 50
     idp_confidence_threshold: float = 0.90
 
+    # --- Phase 2 foundations ---
+
+    # Agentic AI
+    agent_max_steps: int = 30
+    agent_max_tokens: int = 50000
+    agent_suspension_timeout_hours: int = 48
+    agent_loop_threshold: int = 3
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
     @property
     def odoo_auth(self) -> str:
         return self.odoo_api_key or self.odoo_password
-
-    @property
-    def whatsapp_enabled(self) -> bool:
-        return bool(self.whatsapp_api_url and self.whatsapp_api_token)
 
     @property
     def slack_enabled(self) -> bool:

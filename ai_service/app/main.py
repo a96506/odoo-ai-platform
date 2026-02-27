@@ -31,6 +31,9 @@ from app.routers.forecast import router as forecast_router
 from app.routers.reports import router as reports_router
 from app.routers.role_dashboard import router as role_dashboard_router
 from app.routers.websocket import router as ws_router
+from app.routers.slack import router as slack_router
+from app.routers.agents import router as agents_router
+from app.routers.supply_chain import router as supply_chain_router
 
 logger = structlog.get_logger()
 
@@ -40,6 +43,8 @@ async def lifespan(app: FastAPI):
     logger.info("starting_ai_service")
     init_db()
     init_automations()
+    from app.agents import init_agents
+    init_agents()
     seed_default_rules()
     logger.info("ai_service_ready")
     yield
@@ -78,6 +83,9 @@ app.include_router(forecast_router)
 app.include_router(reports_router)
 app.include_router(role_dashboard_router)
 app.include_router(ws_router)
+app.include_router(slack_router)
+app.include_router(agents_router)
+app.include_router(supply_chain_router)
 
 
 def seed_default_rules():
@@ -131,6 +139,10 @@ def seed_default_rules():
             ("Forecast accuracy tracking", "forecasting", "accuracy_tracking"),
             ("NL report generation", "reporting", "generate_report"),
             ("Scheduled report execution", "reporting", "scheduled_report"),
+            # Phase 2 — Supply Chain Intelligence
+            ("Supplier risk scoring", "supply_chain", "risk_scoring"),
+            ("Delivery degradation detection", "supply_chain", "disruption_prediction"),
+            ("Single-source risk scan", "supply_chain", "single_source_detection"),
         ]
 
         for name, atype, action in defaults:

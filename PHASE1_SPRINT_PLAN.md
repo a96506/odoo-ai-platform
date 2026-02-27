@@ -20,8 +20,8 @@ Phase 1 deliverables are not independent. Some must be built before others.
               │              │              │
      ┌────────▼───────┐  ┌──▼──────────┐  ┌▼───────────────┐
      │  Sprint 1      │  │  Sprint 1   │  │  Sprint 1      │
-     │  1.9 WhatsApp/ │  │  1.1 Month  │  │  1.3 Enhanced  │
-     │  Slack notify  │  │  End Close  │  │  Bank Recon    │
+     │  1.9 Slack     │  │  1.1 Month  │  │  1.3 Enhanced  │
+     │  notify        │  │  End Close  │  │  Bank Recon    │
      └────────┬───────┘  └──┬──────────┘  └┬───────────────┘
               │              │              │
      ┌────────▼───────┐  ┌──▼──────────┐  ┌▼───────────────┐
@@ -54,7 +54,7 @@ Phase 1 deliverables are not independent. Some must be built before others.
 
 | Deliverable | Depends On | Why |
 |-------------|-----------|-----|
-| 1.11 Daily Digest | 1.9 WhatsApp/Slack | Delivers digest via channels |
+| 1.11 Daily Digest | 1.9 Slack | Delivers digest via channels |
 | 1.6 Credit Management | 1.1 Month-End (partial) | Shares AR aging analysis logic |
 | 1.10 Role Dashboards | 1.8 Forecast + 1.1 Close | Dashboards display data from other features |
 | 1.4 IDP | None (standalone) | Can be built independently |
@@ -88,18 +88,16 @@ Before building any Phase 1 feature, set up the engineering scaffolding.
 
 Three independent features that can be developed in parallel.
 
-#### 1.9 WhatsApp/Slack Notification Integration
+#### 1.9 Slack Notification Integration
 
 | Task | Effort |
 |------|--------|
-| Implement WhatsApp Business API client (template messages, interactive buttons) | 8h |
 | Implement Slack interactive messages (approve/reject buttons) | 6h |
 | Channel routing logic (message type -> preferred channel -> fallback) | 4h |
 | Message template storage and management | 4h |
-| Submit WhatsApp message templates to Meta for approval | 2h |
 | Unit tests for notification routing | 4h |
 
-**MVP definition:** Can send a WhatsApp message to a phone number. Can send a Slack message to a channel with buttons. Fallback to email if neither configured.
+**MVP definition:** Can send a Slack message to a channel with buttons. Fallback to email if Slack not configured.
 
 #### 1.1 Month-End Closing Assistant
 
@@ -171,7 +169,7 @@ Three independent features that can be developed in parallel.
 | Daily digest model + migration | 2h |
 | Data aggregation per role (overdue items, approvals, metrics, anomalies) | 8h |
 | AI-generated narrative summary per role | 4h |
-| Delivery via configured channels (email, Slack, WhatsApp) | 3h |
+| Delivery via configured channels (email, Slack) | 3h |
 | Celery beat task (daily at 7 AM per timezone) | 2h |
 | Role configuration (which roles get which data) | 3h |
 | Unit tests | 4h |

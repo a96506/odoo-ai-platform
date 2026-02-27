@@ -104,7 +104,7 @@ Agent (graph-based execution)
   |   |-- Branch B: Request approval (medium confidence)
   |   |-- Branch C: Escalate (low confidence or complex case)
   |-- Step 4: Execute action(s) in Odoo
-  |-- Step 5: Notify stakeholders (WhatsApp/Slack/email)
+  |-- Step 5: Notify stakeholders (Slack/email)
   |-- Step 6: Schedule follow-up if needed
   |
   v
@@ -215,7 +215,7 @@ class ProcureToPayAgent:
 | **OrderToDeliveryAgent** | Sales order confirmed | Check stock -> Reserve -> Create picking -> Track -> Confirm delivery -> Create invoice | Sales + Inventory + Accounting |
 | **LeadToOpportunityAgent** | New lead created | Score -> Deduplicate -> Assign -> Draft follow-up -> Monitor engagement -> Convert or archive | CRM + Sales |
 | **ReorderAgent** | Stock below reorder point | Forecast demand -> Evaluate suppliers -> Select vendor -> Create PO -> Get approval -> Track delivery | Inventory + Purchase + Supply Chain |
-| **CollectionAgent** | Invoice overdue | Assess customer -> Select strategy -> Draft message -> Send via WhatsApp -> Track response -> Escalate if needed -> Update credit score | Accounting + CRM + Communication |
+| **CollectionAgent** | Invoice overdue | Assess customer -> Select strategy -> Draft message -> Send via Slack/email -> Track response -> Escalate if needed -> Update credit score | Accounting + CRM + Communication |
 | **MonthEndCloseAgent** | Scheduled (monthly) | Scan unreconciled -> Find stale drafts -> Check unbilled deliveries -> Validate taxes -> Generate report -> Guide controller | Accounting + Inventory + Sales |
 | **EmployeeExpenseAgent** | Expense submitted | Validate policy -> Check duplicates -> Categorize -> Route approval -> Process payment | HR + Accounting |
 

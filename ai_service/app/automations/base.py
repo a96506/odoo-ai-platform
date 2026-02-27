@@ -197,7 +197,7 @@ class BaseAutomation(ABC):
     ) -> bool:
         """
         Send a notification via the notification service.
-        Channels: "email", "whatsapp", "slack", "in_app".
+        Channels: "email", "slack", "in_app".
         Returns True if sent successfully, False otherwise.
         """
         try:

@@ -244,36 +244,28 @@ Each Phase 1 deliverable has:
 
 ---
 
-## 1.9 WhatsApp/Slack Notification Integration
+## 1.9 Slack Notification Integration
 
 ### User Journey
 
 **Actor:** Any user receiving notifications
 
-1. Admin configures WhatsApp Business API credentials in settings
-2. Admin configures Slack bot token in settings
-3. System sends payment reminders via WhatsApp to customers
-4. System sends approval requests via Slack to internal team with approve/reject buttons
-5. Team member clicks "Approve" in Slack; action is executed in Odoo
-6. Customer replies to WhatsApp message; reply is logged in Odoo chatter
+1. Admin configures Slack bot token in settings
+2. System sends approval requests via Slack to internal team with approve/reject buttons
+3. Team member clicks "Approve" in Slack; action is executed in Odoo
+4. Email notifications sent for external-facing messages (payment reminders, order confirmations)
 
 ### Acceptance Criteria
 
-- [ ] WhatsApp: can send template messages to phone numbers
-- [ ] WhatsApp: interactive buttons (Pay Now, View Invoice, Approve, Reject)
-- [ ] WhatsApp: delivery status tracked (sent, delivered, read)
 - [ ] Slack: messages with interactive buttons for approvals
 - [ ] Slack: button click triggers approval in AI platform
-- [ ] Email fallback when WhatsApp/Slack not configured
+- [ ] Email fallback when Slack not configured
 - [ ] Channel routing logic: message type determines primary/fallback channel
 - [ ] All notifications logged in `audit_logs`
 
 ### Out of Scope
 
 - Microsoft Teams integration (Phase 2)
-- SMS via Twilio (Phase 3)
-- Two-way WhatsApp conversation flows
-- WhatsApp Flows (interactive forms)
 
 ---
 
@@ -316,7 +308,7 @@ Each Phase 1 deliverable has:
 
 1. Every morning at 7 AM, AI compiles data relevant to each role
 2. AI generates a natural language summary with key metrics, attention items, and anomalies
-3. Digest is delivered via user's preferred channel (email, Slack, WhatsApp)
+3. Digest is delivered via user's preferred channel (email or Slack)
 4. User reads digest and knows exactly what needs their attention today
 
 ### Acceptance Criteria

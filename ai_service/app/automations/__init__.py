@@ -41,6 +41,7 @@ def init_automations():
     from app.automations.daily_digest import DailyDigestAutomation
     from app.automations.cash_flow import CashFlowForecastingAutomation
     from app.automations.report_builder import ReportBuilderAutomation
+    from app.automations.supply_chain import SupplyChainAutomation
 
     handlers = [
         AccountingAutomation(),
@@ -60,6 +61,7 @@ def init_automations():
         DailyDigestAutomation(),
         CashFlowForecastingAutomation(),
         ReportBuilderAutomation(),
+        SupplyChainAutomation(),
     ]
     for handler in handlers:
         register_automation(handler)

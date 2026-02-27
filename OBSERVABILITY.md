@@ -148,8 +148,8 @@ Phase 2+: Add Prometheus client library and Grafana dashboard if operational com
 
 | Alert | Severity | Channel | Condition |
 |-------|----------|---------|-----------|
-| AI service down | Critical | Slack + SMS | `/health` returns unhealthy or unreachable for 2 min |
-| Database unreachable | Critical | Slack + SMS | DB health check fails for 1 min |
+| AI service down | Critical | Slack | `/health` returns unhealthy or unreachable for 2 min |
+| Database unreachable | Critical | Slack | DB health check fails for 1 min |
 | Claude API errors | High | Slack | >5 failed Claude calls in 10 min |
 | Claude daily spend exceeded | High | Slack | Daily cost > $5.00 |
 | Celery worker down | High | Slack | No active workers for 5 min |

@@ -61,6 +61,39 @@ class AutomationType(str, enum.Enum):
     FORECASTING = "forecasting"
     REPORTING = "reporting"
     DOCUMENT_PROCESSING = "document_processing"
+    SUPPLY_CHAIN = "supply_chain"
+    AGENT_WORKFLOW = "agent_workflow"
+
+
+class AgentRunStatus(str, enum.Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    SUSPENDED = "suspended"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class AgentStepStatus(str, enum.Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
+class RiskClassification(str, enum.Enum):
+    LOW = "low"
+    WATCH = "watch"
+    ELEVATED = "elevated"
+    CRITICAL = "critical"
+
+
+class AlertSeverity(str, enum.Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
 
 
 # ---------------------------------------------------------------------------
@@ -410,6 +443,203 @@ class DailyDigest(Base):
     channels_sent = Column(JSON, default=list)
     delivered = Column(Boolean, default=False)
     generated_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 tables — Agent Orchestration (2.1)
+# ---------------------------------------------------------------------------
+
+class AgentRun(Base):
+    __tablename__ = "agent_runs"
+    __table_args__ = (
+        Index("idx_agent_runs_type", "agent_type"),
+        Index("idx_agent_runs_status", "status"),
+        Index("idx_agent_runs_started", "started_at"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    agent_type = Column(String(100), nullable=False)
+    trigger_type = Column(String(50), nullable=False)
+    trigger_id = Column(String(255))
+    status = Column(SAEnum(AgentRunStatus), default=AgentRunStatus.PENDING, nullable=False)
+    started_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime)
+    total_steps = Column(Integer, default=0)
+    token_usage = Column(Integer, default=0)
+    error = Column(Text)
+    initial_state = Column(JSON, default=dict)
+    final_state = Column(JSON)
+
+    steps = relationship("AgentStep", back_populates="run", cascade="all, delete-orphan", order_by="AgentStep.step_index")
+    suspensions = relationship("AgentSuspension", back_populates="run", cascade="all, delete-orphan")
+
+
+class AgentStep(Base):
+    __tablename__ = "agent_steps"
+    __table_args__ = (
+        Index("idx_agent_steps_run", "agent_run_id"),
+        Index("idx_agent_steps_status", "status"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    agent_run_id = Column(Integer, ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False)
+    step_name = Column(String(100), nullable=False)
+    step_index = Column(Integer, nullable=False)
+    input_data = Column(JSON)
+    output_data = Column(JSON)
+    duration_ms = Column(Integer)
+    status = Column(SAEnum(AgentStepStatus), default=AgentStepStatus.PENDING, nullable=False)
+    claude_tokens_used = Column(Integer, default=0)
+    started_at = Column(DateTime)
+    completed_at = Column(DateTime)
+
+    run = relationship("AgentRun", back_populates="steps")
+    decisions = relationship("AgentDecision", back_populates="step", cascade="all, delete-orphan")
+
+
+class AgentDecision(Base):
+    __tablename__ = "agent_decisions"
+    __table_args__ = (
+        Index("idx_agent_decisions_step", "agent_step_id"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    agent_step_id = Column(Integer, ForeignKey("agent_steps.id", ondelete="CASCADE"), nullable=False)
+    prompt_hash = Column(String(64))
+    response = Column(JSON)
+    confidence = Column(Float)
+    tools_used = Column(JSON, default=list)
+    tokens_input = Column(Integer, default=0)
+    tokens_output = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    step = relationship("AgentStep", back_populates="decisions")
+
+
+class AgentSuspension(Base):
+    __tablename__ = "agent_suspensions"
+    __table_args__ = (
+        Index("idx_agent_suspensions_run", "agent_run_id"),
+        Index("idx_agent_suspensions_timeout", "timeout_at"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    agent_run_id = Column(Integer, ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False)
+    resume_condition = Column(String(100), nullable=False)
+    resume_data = Column(JSON, default=dict)
+    suspended_at_step = Column(String(100))
+    timeout_at = Column(DateTime)
+    suspended_at = Column(DateTime, default=datetime.utcnow)
+    resumed_at = Column(DateTime)
+
+    run = relationship("AgentRun", back_populates="suspensions")
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 tables — Supply Chain Intelligence (2.8)
+# ---------------------------------------------------------------------------
+
+class SupplierRiskScore(Base):
+    __tablename__ = "supplier_risk_scores"
+    __table_args__ = (
+        Index("idx_risk_scores_vendor", "vendor_id"),
+        Index("idx_risk_scores_classification", "classification"),
+        Index("idx_risk_scores_scored_at", "scored_at"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vendor_id = Column(Integer, nullable=False)
+    vendor_name = Column(String(255))
+    score = Column(Numeric(5, 2), nullable=False)
+    previous_score = Column(Numeric(5, 2))
+    classification = Column(SAEnum(RiskClassification), nullable=False)
+    summary = Column(Text)
+    scored_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    factors = relationship("SupplierRiskFactor", back_populates="risk_score", cascade="all, delete-orphan")
+
+
+class SupplierRiskFactor(Base):
+    __tablename__ = "supplier_risk_factors"
+    __table_args__ = (
+        Index("idx_risk_factors_score", "risk_score_id"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    risk_score_id = Column(Integer, ForeignKey("supplier_risk_scores.id", ondelete="CASCADE"), nullable=False)
+    factor_name = Column(String(100), nullable=False)
+    weight = Column(Numeric(4, 2), nullable=False)
+    raw_value = Column(Numeric(10, 4))
+    weighted_score = Column(Numeric(6, 2), nullable=False)
+    details = Column(JSON)
+
+    risk_score = relationship("SupplierRiskScore", back_populates="factors")
+
+
+class DisruptionPrediction(Base):
+    __tablename__ = "disruption_predictions"
+    __table_args__ = (
+        Index("idx_disruption_vendor", "vendor_id"),
+        Index("idx_disruption_active", "is_active"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vendor_id = Column(Integer, nullable=False)
+    vendor_name = Column(String(255))
+    prediction_type = Column(String(50), nullable=False)
+    probability = Column(Numeric(5, 4), nullable=False)
+    estimated_impact = Column(JSON)
+    recommended_actions = Column(JSON, default=list)
+    supporting_data = Column(JSON)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime)
+    resolved_at = Column(DateTime)
+
+
+class SupplyChainAlert(Base):
+    __tablename__ = "supply_chain_alerts"
+    __table_args__ = (
+        Index("idx_sc_alerts_vendor", "vendor_id"),
+        Index("idx_sc_alerts_severity", "severity"),
+        Index("idx_sc_alerts_resolved", "resolved_at"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vendor_id = Column(Integer, nullable=False)
+    vendor_name = Column(String(255))
+    alert_type = Column(String(50), nullable=False)
+    severity = Column(SAEnum(AlertSeverity), nullable=False)
+    title = Column(String(500), nullable=False)
+    message = Column(Text, nullable=False)
+    related_prediction_id = Column(Integer, ForeignKey("disruption_predictions.id"))
+    acknowledged_by = Column(String(255))
+    acknowledged_at = Column(DateTime)
+    resolved_at = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AlternativeSupplierMap(Base):
+    __tablename__ = "alternative_supplier_maps"
+    __table_args__ = (
+        Index("idx_alt_supplier_product", "product_id"),
+        Index("idx_alt_supplier_primary", "primary_vendor_id"),
+        UniqueConstraint("product_id", "primary_vendor_id", "alternative_vendor_id", name="uq_alt_supplier_mapping"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    product_id = Column(Integer, nullable=False)
+    product_name = Column(String(255))
+    primary_vendor_id = Column(Integer, nullable=False)
+    primary_vendor_name = Column(String(255))
+    alternative_vendor_id = Column(Integer, nullable=False)
+    alternative_vendor_name = Column(String(255))
+    price_delta_pct = Column(Numeric(6, 2))
+    lead_time_delta_days = Column(Integer)
+    quality_comparable = Column(Boolean)
+    last_evaluated = Column(DateTime, default=datetime.utcnow)
+    is_single_source = Column(Boolean, default=False)
+    revenue_at_risk = Column(Numeric(15, 2))
 
 
 _engine = None

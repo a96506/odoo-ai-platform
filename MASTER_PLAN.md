@@ -74,7 +74,7 @@ Example agent workflow:
 2. Check sales pipeline for upcoming orders requiring Product X
 3. Evaluate 3 suppliers on price, lead time, and reliability score
 4. Create PO with optimal supplier and quantity
-5. Notify purchasing manager via WhatsApp with summary and approval link
+5. Notify purchasing manager via Slack with summary and approval link
 6. On approval, confirm PO and schedule follow-up for delivery tracking
 
 This requires upgrading from isolated Celery tasks to an **agent orchestration layer** where agents maintain state across multi-step workflows and can branch based on intermediate results.
@@ -125,7 +125,7 @@ AI-curated briefing delivered each morning per user:
 - What needs your attention today (overdue items, pending approvals, at-risk deals)
 - Key metrics vs. yesterday (new leads, revenue, stock alerts)
 - Anomalies detected overnight (unusual transactions, failed automations)
-- Delivery via user's preferred channel: email, WhatsApp, Slack, or in-app
+- Delivery via user's preferred channel: email, Slack, or in-app
 
 #### 2D. High-Priority UX Improvements
 
@@ -195,12 +195,9 @@ Replace email-only notifications with multi-channel delivery:
 
 | Channel | Use Cases |
 |---------|-----------|
-| WhatsApp | Payment reminders, order confirmations, approval requests, delivery updates, collection messages |
 | Slack | Internal approvals, AI alerts, team notifications, daily digest |
 | Microsoft Teams | Same as Slack for Teams-based organizations |
-| SMS | Critical alerts, two-factor auth, time-sensitive notifications |
-
-98% open rate on WhatsApp vs. 20% on email makes this critical for collection and approval workflows.
+| Email | Payment reminders, order confirmations, approval requests, delivery updates, collection messages |
 
 #### 4B. Customer Self-Service Portal
 
@@ -249,7 +246,7 @@ Native connectors replacing manual data entry:
 | Payments | Stripe, PayPal, Tap (GCC), Benefit, KNET |
 | Shipping | DHL, FedEx, Aramex, SMSA, UPS -- auto-tracking, label generation |
 | Government | Tax portal APIs (VAT filing), commercial registration, customs |
-| Communication | WhatsApp Business API, Slack, Teams, Twilio SMS |
+| Communication | Slack, Teams |
 | Accounting | Auto-sync with external audit tools, tax preparation software |
 
 #### 5C. Intelligent Document Processing (IDP)
@@ -352,7 +349,7 @@ flowchart TB
         WebUI[Odoo Web UI]
         MobileApp[PWA / Mobile]
         Portal[Customer/Vendor Portal]
-        Chat[WhatsApp / Slack / Teams]
+        Chat[Slack / Teams]
     end
 
     subgraph core [Smart Odoo Core]
@@ -435,7 +432,6 @@ What must be added, changed, or removed from the current stack to reach the targ
 | `weasyprint` or `reportlab` | 1.7 Report Builder | Generate formatted PDF reports |
 | `rapidfuzz` | 1.3 Bank Reconciliation, 1.5 Deduplication | Fuzzy string matching for partial refs, names, addresses |
 | `prophet` or `statsforecast` + `pandas` + `numpy` | 1.8 Cash Flow Forecasting | Time-series forecasting for AR/AP/pipeline prediction |
-| WhatsApp Business API SDK | 1.9 WhatsApp integration | Multi-channel notifications (98% open rate vs email 20%) |
 | `slack-sdk` | 1.9 Slack integration | Internal approvals, alerts, daily digest via Slack |
 | `aiosmtplib` or Odoo relay | 1.11 Daily Digest | Outbound email from AI service |
 | `recharts` or `chart.js` (frontend) | 1.10 Role-based dashboards | Charts, graphs, KPI visualizations |
@@ -542,7 +538,7 @@ See: [Activation Plan](.cursor/plans/make_odoo_smart_23d38461.plan.md)
 | 1.6 | Customer Credit Management | 1B | Prevents revenue loss |
 | 1.7 | Natural Language Report Builder | 1B | 2-4 dev days/report saved |
 | 1.8 | Cash Flow Forecasting | 3A | 15-25 hrs/week saved (finance team) |
-| 1.9 | WhatsApp/Slack notification integration | 4A | 5x higher engagement vs email |
+| 1.9 | Slack notification integration | 4A | Real-time internal notifications |
 | 1.10 | Role-based AI dashboards | 2B | Every user, every day |
 | 1.11 | Proactive AI daily digest | 2C | Replaces notification noise |
 
@@ -617,7 +613,7 @@ See: [Activation Plan](.cursor/plans/make_odoo_smart_23d38461.plan.md)
 | IDP / Document AI | Phase 1 | Yes | Basic OCR | Yes | No |
 | Low-Code Builder | Phase 3 | Yes (BTP) | SuiteScript | Power Platform | Frappe |
 | Customer Portal | Phase 3 | Yes | Yes (SuiteCommerce) | Yes | Basic |
-| WhatsApp Integration | Phase 1 | No | No | No | No |
+| Slack Integration | Phase 1 | No | No | No | No |
 | MCP Protocol | Phase 3 | No | Yes (2026.1) | No | No |
 | Dark Mode | Phase 2 | Yes | Yes | Yes | Yes |
 | Offline / PWA | Phase 4 | Fiori offline | No | Partial | No |
@@ -625,7 +621,7 @@ See: [Activation Plan](.cursor/plans/make_odoo_smart_23d38461.plan.md)
 | Implementation Speed | Weeks | Months | Months | Months | Weeks |
 | Open Source | Yes | No | No | No | Yes |
 
-**Where Smart Odoo wins:** Cost, implementation speed, open source, WhatsApp-native (critical for GCC/ME), AI-native from day 1 (not bolted-on like SAP/Microsoft).
+**Where Smart Odoo wins:** Cost, implementation speed, open source, AI-native from day 1 (not bolted-on like SAP/Microsoft).
 
 **Where Smart Odoo catches up:** Agentic AI depth (Phase 2), portal maturity (Phase 3), compliance breadth (Phase 3-4).
 
@@ -662,7 +658,7 @@ All supporting documents and their role in this plan:
 | [ODOO_UX_PAIN_POINTS.md](ODOO_UX_PAIN_POINTS.md) | 20 UX/UI issues, design principles, competitive benchmark | Pillar 2 |
 | [AGENTIC_AI_ARCHITECTURE.md](AGENTIC_AI_ARCHITECTURE.md) | Agentic AI upgrade: LangGraph framework, agent design patterns, 7 planned agents, guardrails | Pillar 1C |
 | [FINANCE_INTELLIGENCE.md](FINANCE_INTELLIGENCE.md) | Cash flow forecasting (LSTM/Prophet), continuous close, compliance monitoring, ESG | Pillar 3 |
-| [COMMUNICATION_AND_PORTALS.md](COMMUNICATION_AND_PORTALS.md) | WhatsApp/Slack/Teams integration, customer portal, vendor portal | Pillar 4 |
+| [COMMUNICATION_AND_PORTALS.md](COMMUNICATION_AND_PORTALS.md) | Slack/Teams integration, customer portal, vendor portal | Pillar 4 |
 | [PLATFORM_CAPABILITIES.md](PLATFORM_CAPABILITIES.md) | Low-code builder, integration hub, IDP document processing, MCP protocol, digital twins | Pillar 5 |
 | [SUPPLY_CHAIN_INTELLIGENCE.md](SUPPLY_CHAIN_INTELLIGENCE.md) | Supplier risk scoring, disruption prediction, alternative supplier intelligence | Pillar 6A |
 | **Engineering Scaffolding** | | |
@@ -694,6 +690,5 @@ All supporting documents and their role in this plan:
 - IDP industry: Vision LLMs achieving 99%+ accuracy, 20-30 second document processing
 - Supply chain: Predictive analytics forecasting supplier failures 90-180 days ahead
 - B2B portals: 5 core self-service capabilities B2B customers demand in 2026
-- WhatsApp Business: 98% open rate vs email 20%
 - GTreasury: 30% improvement in cash forecast accuracy with AI
 - Odoo forums, Reddit r/Odoo, Gartner Peer Insights, GitHub issues

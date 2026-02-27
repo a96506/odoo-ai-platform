@@ -19,7 +19,7 @@ The **[MASTER_PLAN.md](MASTER_PLAN.md)** is the single source of truth for all p
 | [ODOO_UX_PAIN_POINTS.md](ODOO_UX_PAIN_POINTS.md) | 20 UX/UI issues, design principles, competitive UX benchmark (Pillar 2) |
 | [AGENTIC_AI_ARCHITECTURE.md](AGENTIC_AI_ARCHITECTURE.md) | Agentic AI upgrade: LangGraph, agent design patterns, 7 planned agents, guardrails (Pillar 1C) |
 | [FINANCE_INTELLIGENCE.md](FINANCE_INTELLIGENCE.md) | Cash flow forecasting, continuous close, compliance monitoring, ESG reporting (Pillar 3) |
-| [COMMUNICATION_AND_PORTALS.md](COMMUNICATION_AND_PORTALS.md) | WhatsApp/Slack/Teams integration, customer portal, vendor portal (Pillar 4) |
+| [COMMUNICATION_AND_PORTALS.md](COMMUNICATION_AND_PORTALS.md) | Slack/Teams integration, customer portal, vendor portal (Pillar 4) |
 | [PLATFORM_CAPABILITIES.md](PLATFORM_CAPABILITIES.md) | Low-code builder, integration hub, IDP, MCP protocol, digital twins (Pillar 5) |
 | [SUPPLY_CHAIN_INTELLIGENCE.md](SUPPLY_CHAIN_INTELLIGENCE.md) | Supplier risk scoring, disruption prediction, alternative supplier intelligence (Pillar 6A) |
 | [TESTING_STRATEGY.md](TESTING_STRATEGY.md) | Test layers, mock strategy, CI/CD pipeline, coverage targets |
@@ -63,7 +63,7 @@ Each deep-dives into one pillar. Only need MASTER_PLAN + the pillar-specific pai
 |------|-----------|--------|
 | [AGENTIC_AI_ARCHITECTURE.md](AGENTIC_AI_ARCHITECTURE.md) | MASTER_PLAN (Pillar 1C) | Multi-step autonomous agents, LangGraph, guardrails |
 | [FINANCE_INTELLIGENCE.md](FINANCE_INTELLIGENCE.md) | MASTER_PLAN (Pillar 3), ODOO_PAIN_POINTS (#3 month-end) | Cash flow forecasting, continuous close, compliance |
-| [COMMUNICATION_AND_PORTALS.md](COMMUNICATION_AND_PORTALS.md) | MASTER_PLAN (Pillar 4) | WhatsApp/Slack, customer portal, vendor portal |
+| [COMMUNICATION_AND_PORTALS.md](COMMUNICATION_AND_PORTALS.md) | MASTER_PLAN (Pillar 4) | Slack, customer portal, vendor portal |
 | [PLATFORM_CAPABILITIES.md](PLATFORM_CAPABILITIES.md) | MASTER_PLAN (Pillar 5) | IDP, low-code builder, MCP protocol, digital twins |
 | [SUPPLY_CHAIN_INTELLIGENCE.md](SUPPLY_CHAIN_INTELLIGENCE.md) | MASTER_PLAN (Pillar 6A) | Supplier risk scoring, disruption prediction |
 
@@ -117,8 +117,9 @@ odoo-ai-platform/
 │   │   ├── script.py.mako
 │   │   └── versions/
 │   │       ├── 001_extend_automation_type_enum.py
-│   │       └── 002_phase1_tables.py  # 13 new Phase 1 tables
-│   ├── tests/                   # pytest suite (362 tests, 69%+ coverage)
+│   │       ├── 002_phase1_tables.py  # 13 new Phase 1 tables
+│   │       └── 003_phase2_tables.py  # 9 new Phase 2 tables (agents + supply chain)
+│   ├── tests/                   # pytest suite (443 tests)
 │   │   ├── conftest.py          # In-memory SQLite DB, TestClient, mocks
 │   │   ├── fixtures/
 │   │   │   └── webhook_payloads.py  # 13 fixtures for all 11 Odoo models
@@ -133,6 +134,9 @@ odoo-ai-platform/
 │   │   ├── test_cash_flow.py     # Cash flow forecasting engine + scenarios + API tests (39 tests)
 │   │   ├── test_report_builder.py # NL report builder + exports + API tests (50 tests)
 │   │   ├── test_role_dashboard.py # Role-based dashboards + WebSocket + schemas (35 tests)
+│   │   ├── test_slack.py        # Slack integration: channel, Block Kit, interactions, digest (29 tests)
+│   │   ├── test_agents.py       # BaseAgent, Orchestrator, concrete agents + API tests (28 tests)
+│   │   ├── test_supply_chain.py # Anomaly detector, risk scoring, supply chain API tests (26 tests)
 │   │   ├── test_config.py       # Settings property tests
 │   │   ├── test_fixtures.py     # Fixture validation tests
 │   │   ├── test_models.py       # All 18 model CRUD tests
@@ -141,20 +145,28 @@ odoo-ai-platform/
 │       ├── __init__.py          # Package init
 │       ├── main.py              # FastAPI app factory (lean: lifespan + router includes)
 │       ├── auth.py              # API key auth dependency (X-API-Key header)
-│       ├── config.py            # pydantic-settings configuration (incl. Phase 1 fields)
+│       ├── config.py            # pydantic-settings configuration (incl. Phase 1+2 fields)
 │       ├── odoo_client.py       # Odoo XML-RPC client wrapper
 │       ├── claude_client.py     # Anthropic Claude API wrapper (tool-use)
 │       ├── chat.py              # Natural language ERP chat interface
+│       ├── onboarding.py        # AI onboarding assistant (role tips, contextual suggestions)
 │       ├── models/
 │       │   ├── __init__.py      # Package init
-│       │   ├── audit.py         # SQLAlchemy models (16 tables) + get_db helpers
+│       │   ├── audit.py         # SQLAlchemy models (25 tables) + get_db helpers
 │       │   └── schemas.py       # Pydantic request/response schemas
+│       ├── agents/              # Phase 2 Agentic AI (LangGraph-based multi-step agents)
+│       │   ├── __init__.py      # Agent registry + init_agents()
+│       │   ├── base_agent.py    # BaseAgent ABC (state, guardrails, persistence, suspend/resume)
+│       │   ├── orchestrator.py  # AgentOrchestrator singleton (select, run, resume, list agents)
+│       │   ├── procure_to_pay.py # ProcureToPayAgent (invoice → PO match → bill → post)
+│       │   ├── collection.py    # CollectionAgent (overdue invoice → strategy → message → escalate)
+│       │   └── month_end_close.py # MonthEndCloseAgent (scan → anomaly → auto-resolve → report)
 │       ├── routers/
 │       │   ├── __init__.py      # Package init
 │       │   ├── health.py        # GET /health
 │       │   ├── dashboard.py     # GET /api/stats, /api/audit-logs, POST /api/approve
 │       │   ├── rules.py         # CRUD /api/rules
-│       │   ├── chat.py          # POST /api/chat, /api/chat/confirm
+│       │   ├── chat.py          # POST /api/chat, /api/chat/confirm, GET /api/chat/onboarding, GET /api/chat/suggestions
 │       │   ├── insights.py      # GET /api/insights, POST /api/trigger
 │       │   ├── closing.py       # POST /api/close/start, GET /api/close/{period}/status, POST step/complete, POST rescan
 │       │   ├── reconciliation.py # POST /api/reconciliation/start, GET suggestions, POST match/skip
@@ -165,7 +177,10 @@ odoo-ai-platform/
 │       │   ├── forecast.py     # GET /api/forecast/cashflow, POST scenario, GET accuracy, GET/GET scenarios
 │       │   ├── reports.py      # POST /api/reports/generate, GET /{id}, GET /{id}/download, POST schedule
 │       │   ├── role_dashboard.py # GET /api/dashboard/{cfo,sales,warehouse} — role-specific aggregated views
-│       │   └── websocket.py    # WS /ws/dashboard — real-time updates via Redis pub/sub
+│       │   ├── websocket.py    # WS /ws/dashboard — real-time updates via Redis pub/sub
+│       │   ├── slack.py        # POST /api/slack/interactions — Slack interactive button callbacks
+│       │   ├── agents.py       # POST /api/agents/run, GET /api/agents/runs, GET types, POST resume
+│       │   └── supply_chain.py # GET /api/supply-chain/risk-scores, alerts, predictions, POST scan
 │       ├── automations/
 │       │   ├── __init__.py      # Automation registry
 │       │   ├── base.py          # BaseAutomation class (+ handle_batch, notify)
@@ -187,13 +202,14 @@ odoo-ai-platform/
 │       │   ├── document_processing.py # Vision-LLM invoice extraction + fuzzy vendor matching
 │       │   ├── daily_digest.py  # Role-based daily briefing (CFO/Sales/Warehouse)
 │       │   ├── cash_flow.py     # 30/60/90-day cash flow forecasting + scenarios
-│       │   └── report_builder.py # NL query → Odoo data → table/Excel/PDF export
+│       │   ├── report_builder.py # NL query → Odoo data → table/Excel/PDF export
+│       │   ├── anomaly_detection.py # Benford's Law + Z-score statistical anomaly detection
+│       │   └── supply_chain.py  # Supplier risk scoring, disruption prediction, single-source detection
 │       ├── notifications/
 │       │   ├── __init__.py      # Package init
 │       │   ├── base.py          # NotificationChannel abstract base
 │       │   ├── email.py         # SMTP email channel
-│       │   ├── slack.py         # Slack SDK channel
-│       │   ├── whatsapp.py      # WhatsApp Business API channel
+│       │   ├── slack.py         # Slack SDK channel (Block Kit, interactive buttons, digest)
 │       │   └── service.py       # NotificationService (unified router)
 │       ├── webhooks/
 │       │   ├── __init__.py      # Package init
@@ -255,7 +271,9 @@ odoo-ai-platform/
 │           ├── RoleSwitcher.js  # Role selection dropdown (CFO/Sales/Warehouse/Overview)
 │           ├── CFODashboard.js  # Cash forecast AreaChart, AR/AP aging, P&L, close status
 │           ├── SalesDashboard.js # Pipeline BarChart, conversion funnel, at-risk deals
-│           └── WarehouseDashboard.js # Stock levels chart, reorder alerts, shipments
+│           ├── WarehouseDashboard.js # Stock levels chart, reorder alerts, shipments
+│           ├── AgentDashboard.js # AI agent runs table, type filter, step detail view
+│           └── SupplyChainDashboard.js # Vendor risk scores, alerts, predictions, scan trigger
 │
 └── scripts/
     ├── deploy.sh                # Docker deployment script
@@ -315,8 +333,9 @@ python -m pytest tests/ --cov=app --cov-report=term-missing
 - pandas, numpy (data processing and forecasting)
 - openpyxl (Excel report generation)
 - pdfplumber (PDF parsing for IDP)
-- slack-sdk (Slack notifications)
+- slack-sdk (Slack Block Kit messaging, interactive buttons, approval workflow)
 - aiosmtplib (async email sending)
+- langgraph, langgraph-checkpoint-postgres (Phase 2 agentic AI graph execution)
 
 ### Dashboard (Node.js)
 - next 14, react 18, tailwindcss 3
@@ -355,10 +374,10 @@ This applies to: FastAPI, SQLAlchemy, Alembic, Pydantic, Celery, Anthropic SDK, 
 - Webhook signature (HMAC-SHA256) is **mandatory** on all incoming Odoo webhooks; unsigned requests are rejected with 401
 - DB engine and session factory are cached as module-level singletons for connection pooling
 - FastAPI endpoints use `Depends(get_db)` for session lifecycle; Celery tasks use `with get_db_session()` context manager
-- API routes are split into routers: health, dashboard, rules, chat, insights, closing, reconciliation, deduplication, credit, documents, digest, forecast, reports, role_dashboard, websocket (main.py is a lean app factory)
+- API routes are split into routers: health, dashboard, rules, chat, insights, closing, reconciliation, deduplication, credit, documents, digest, forecast, reports, role_dashboard, websocket, slack (main.py is a lean app factory)
 - `BaseAutomation` provides `handle_batch()` for multi-record processing and `notify()` for sending messages via channels
-- `NotificationService` routes messages to email/slack/whatsapp channels; channels are auto-registered and checked via `is_configured()`
-- Settings includes optional Phase 1 config fields (WhatsApp, Slack, SMTP, forecasting, IDP) -- all disabled by default
+- `NotificationService` routes messages to email/slack channels; channels are auto-registered and checked via `is_configured()`
+- Settings includes optional Phase 1 config fields (Slack, SMTP, forecasting, IDP) -- all disabled by default
 - Cross-app intelligence runs every 6 hours via Celery beat
 - Docker services use health-check-based `depends_on` for proper startup ordering
 - PostgreSQL credentials are sourced from env vars (POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB)
@@ -423,10 +442,37 @@ This applies to: FastAPI, SQLAlchemy, Alembic, Pydantic, Celery, Anthropic SDK, 
 - Centralized API helper (dashboard/src/lib/api.js) adds X-API-Key header to all requests; WS URL derived from API URL
 - Redis maxmemory increased from 128mb to 256mb; NEXT_PUBLIC_WS_URL and NEXT_PUBLIC_API_KEY env vars added to dashboard service
 - 19 automation handlers registered: 10 original + month_end + deduplication + credit + document_processing + daily_digest + cash_flow + report_builder + role_dashboard + websocket
-- 362 tests total (35 new for Sprint 5); full test suite passes
+- 389 tests total (29 new for Slack integration); full test suite passes
+- Slack integration uses Block Kit for rich messages with approve/reject buttons; interaction endpoint at POST /api/slack/interactions
+- Slack interaction endpoint is public (no API key) — protected by Slack signing secret verification (HMAC-SHA256 with X-Slack-Signature header)
+- Approval actions from Slack route to existing AuditLog PENDING -> APPROVED/REJECTED workflow; original message replaced with status update
+- Celery webhook processing auto-sends Slack approval notification when action has PENDING status and Slack is configured
+- Daily digest supports Slack delivery via Block Kit (key metrics as fields, attention items with severity emojis, anomalies in context blocks)
+- WhatsApp removed entirely from project — notification channels are email + Slack only
 - Dashboard Dockerfile requires `ENV HOSTNAME=0.0.0.0` — Next.js standalone binds to localhost by default, which is unreachable from Traefik's Docker overlay network
 - SSH deploys must use `-p compose-navigate-haptic-matrix-2qe6ph` with docker compose — omitting `-p` creates duplicate containers under project name `code`
 - After SSH deploy, containers must be manually connected to `dokploy-network`: `docker network connect dokploy-network <container>`
 - Traefik routing for the AI platform is defined in `/etc/dokploy/traefik/dynamic/odoo-ai-platform.yml` (file-based, not container labels)
 - Code on server lives at `/etc/dokploy/compose/compose-navigate-haptic-matrix-2qe6ph/code/`
-- Phase 1 fully deployed to production on 2026-02-26; all 6 services healthy
+- Phase 1 fully deployed to production on 2026-02-26; all 6 services healthy; Slack integration added 2026-02-27 (item 1.9, 17/17 complete)
+- Phase 2 adds 9 new SQLAlchemy models: AgentRun, AgentStep, AgentDecision, AgentSuspension, SupplierRiskScore, SupplierRiskFactor, DisruptionPrediction, SupplyChainAlert, AlternativeSupplierMap
+- Phase 2 Alembic migration `003_phase2_tables` creates 9 tables + extends AutomationType enum with `supply_chain`, `agent`
+- `AutomationType` enum extended with: supply_chain, agent
+- Multi-step agents inherit from `BaseAgent` (not `BaseAutomation`); `BaseAgent` provides LangGraph StateGraph, guardrails, persistence, suspend/resume
+- Agent guardrails: step limit (`agent_max_steps`, default 30), token budget (`agent_max_tokens`, default 50000), loop detection (`agent_loop_threshold`, default 3 visits per node)
+- Suspended agents timeout after `agent_suspension_timeout_hours` (default 48h); resume via `POST /api/agents/runs/{id}/resume`
+- `AgentOrchestrator` singleton coordinates agent selection, execution, and status retrieval
+- 3 concrete agents registered: `procure_to_pay`, `collection`, `month_end_close`
+- `ProcureToPayAgent`: document extraction → PO matching → validation → goods receipt check → draft bill → approval routing → posting → vendor score update
+- `CollectionAgent`: customer assessment → strategy determination (gentle/firm/escalate) → message drafting → sending → credit score update
+- `MonthEndCloseAgent`: issue scanning → anomaly detection (Benford + Z-score) → severity classification → auto-resolution → readiness calculation → report generation
+- Anomaly detection uses Benford's Law (leading digit distribution, chi-squared test) and Z-score analysis (per-journal outliers, threshold 3.0)
+- Supply chain intelligence: vendor risk scoring (7 weighted factors), delivery degradation detection (trend analysis), single-source risk detection
+- Supplier risk scoring factors: delivery performance (25%), quality metrics (20%), financial stability (15%), dependency concentration (15%), geographic risk (10%), compliance (10%), communication (5%)
+- Risk classification: low (>=80), watch (>=60), elevated (>=40), critical (<40)
+- Supply chain Celery beat schedules: daily risk scoring, twice-daily delivery degradation check, weekly single-source scan
+- 20 automation handlers registered: 10 original + month_end + deduplication + credit + document_processing + daily_digest + cash_flow + report_builder + role_dashboard + websocket + supply_chain
+- 443 tests total (28 agent + 26 supply chain); full test suite passes
+- Celery worker initializes agents via `init_agents()` alongside automations on startup
+- AI onboarding assistant provides role-based tips and contextual suggestions via GET /api/chat/onboarding and GET /api/chat/suggestions
+- Dashboard frontend includes AI Agents tab (agent run table, type filter, step detail) and Supply Chain tab (risk scores, alerts, predictions, scan trigger)

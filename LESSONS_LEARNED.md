@@ -470,6 +470,124 @@ The VPS has limited RAM/CPU. Building multiple Docker images concurrently (espec
 
 ---
 
+## 13. SQLAlchemy Column Name Mismatches Between Code and Models
+
+**The goal:** BaseAgent persistence methods write AgentStep, AgentDecision, and AgentSuspension records to the database.
+
+### The Error
+
+```
+TypeError: 'run_id' is an invalid keyword argument for AgentStep
+```
+
+And separately, `AgentDecision` creation silently used wrong column names (`step_id` instead of `agent_step_id`, `prompt_summary` instead of `prompt_hash`).
+
+### Root Cause
+
+When writing the `BaseAgent` persistence helpers (`_log_step`, `_log_decision`, `_suspend_run`, `resume`), the code used intuitive column names (`run_id`, `step_id`, `resolved_at`) instead of the actual column names defined in the SQLAlchemy models (`agent_run_id`, `agent_step_id`, `resumed_at`).
+
+The model definitions used prefixed foreign key names (e.g., `agent_run_id` on `AgentStep`) to avoid ambiguity, but the code assumed shorter names. Same issue appeared in the `AgentOrchestrator.get_run_status()` query (`AgentStep.run_id` instead of `AgentStep.agent_run_id`).
+
+### The Fix
+
+Audited every persistence method in `base_agent.py` and `orchestrator.py` against the actual model definitions in `audit.py`:
+
+```python
+# _log_step: run_id -> agent_run_id
+AgentStep(agent_run_id=run_id, ...)
+
+# _log_decision: step_id -> agent_step_id, prompt_summary -> prompt_hash, response_summary -> response
+AgentDecision(agent_step_id=step.id, prompt_hash=..., response=..., tokens_input=..., tokens_output=...)
+
+# resume: resolved_at -> resumed_at, resolution_data -> resume_data
+suspension.resumed_at = datetime.utcnow()
+suspension.resume_data = event_data
+
+# orchestrator: AgentStep.run_id -> AgentStep.agent_run_id
+.filter(AgentStep.agent_run_id == run_id)
+```
+
+**Rule:** After creating SQLAlchemy models, immediately verify that all code referencing those models uses the exact column names. Never assume column names — always cross-reference the model definition. Prefixed FK names (like `agent_run_id`) are easy to get wrong.
+
+---
+
+## 14. FastAPI `Depends(get_db)` vs `get_db_session()` in Router Endpoints
+
+**The goal:** Supply chain API endpoints query the database and tests pass using the in-memory SQLite test database.
+
+### The Error
+
+```
+sqlite3.OperationalError: no such table: supplier_risk_scores
+```
+
+All supply chain endpoint tests failed, despite the models existing in `Base.metadata`.
+
+### Root Cause
+
+The supply chain router used `get_db_session()` directly (context manager), bypassing FastAPI's dependency injection. The test `client` fixture overrides `get_db` via `app.dependency_overrides[get_db] = _override_db`, but this only affects routes using `Depends(get_db)`.
+
+Routes using `get_db_session()` directly bypass the override and try to connect to the real database (which doesn't have the test tables).
+
+### The Fix
+
+Converted all supply chain router endpoints from `get_db_session()` to `Depends(get_db)`:
+
+```python
+# Before (bypasses test override)
+@router.get("/risk-scores")
+def list_risk_scores():
+    with get_db_session() as session:
+        ...
+
+# After (respects test override)
+@router.get("/risk-scores")
+def list_risk_scores(db: Session = Depends(get_db)):
+    db.query(SupplierRiskScore)...
+```
+
+**Rule:** FastAPI routers must always use `Depends(get_db)` for database access. Reserve `get_db_session()` for Celery tasks and utility functions that run outside the request lifecycle. Using `get_db_session()` in routers breaks the test fixture override pattern.
+
+---
+
+## 15. Mock Session `id` Assignment for SQLAlchemy Objects
+
+**The goal:** BaseAgent test `test_run_completes_successfully` verifies a successful agent run returns `run_id == 1`.
+
+### The Error
+
+```
+AssertionError: assert None == 1
+```
+
+### Root Cause
+
+`_create_run()` does:
+```python
+run = AgentRun(...)
+session.add(run)
+session.flush()
+run_id = run.id
+```
+
+With a mocked session, `session.add()` and `session.flush()` do nothing. The `AgentRun` object's `id` remains `None` (autoincrement only works with a real database). So `_create_run()` returns `None`.
+
+### The Fix
+
+Add a `side_effect` to the mock `session.add` that sets `id = 1` on any object:
+
+```python
+def add_side_effect(obj):
+    if hasattr(obj, "id") and obj.id is None:
+        obj.id = 1
+
+session.add = MagicMock(side_effect=add_side_effect)
+```
+
+**Rule:** When mocking SQLAlchemy sessions, `session.add()` + `session.flush()` won't auto-assign `id`. If your code reads `obj.id` after flush, the mock must explicitly set it via a side effect.
+
+---
+
 ## Summary: Error Prevention Checklist
 
 Before deploying, verify:
@@ -486,3 +604,6 @@ Before deploying, verify:
 - [ ] Traefik config has both `web` and `websecure` entrypoints
 - [ ] `ODOO_USERNAME` is the email login, not `admin`
 - [ ] Alembic migrations run after deploying schema changes
+- [ ] All `BaseAgent` / `AgentOrchestrator` DB calls use exact column names from model definitions (prefixed FKs like `agent_run_id`)
+- [ ] FastAPI routers use `Depends(get_db)`, not `get_db_session()` (breaks test overrides)
+- [ ] Mock session tests set `obj.id` via `add` side_effect when code reads `id` after flush
