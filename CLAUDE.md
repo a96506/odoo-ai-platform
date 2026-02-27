@@ -33,6 +33,7 @@ The **[MASTER_PLAN.md](MASTER_PLAN.md)** is the single source of truth for all p
 | [ACCEPTANCE_CRITERIA.md](ACCEPTANCE_CRITERIA.md) | User journeys and acceptance criteria for all 11 Phase 1 deliverables |
 | [README.md](README.md) | Architecture overview, deployment guide, API endpoints |
 | [LOGBOOK.md](LOGBOOK.md) | Chronological development log -- sessions, deployments, decisions |
+| [LESSONS_LEARNED.md](LESSONS_LEARNED.md) | Error loops, root causes, and fixes discovered during development |
 
 ### Document Reading Order & Dependencies
 
