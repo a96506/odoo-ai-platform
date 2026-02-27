@@ -32,6 +32,7 @@ The **[MASTER_PLAN.md](MASTER_PLAN.md)** is the single source of truth for all p
 | [DEPLOYMENT_OPS.md](DEPLOYMENT_OPS.md) | Environments, deployment, rollback, feature flags, backups, disaster recovery |
 | [ACCEPTANCE_CRITERIA.md](ACCEPTANCE_CRITERIA.md) | User journeys and acceptance criteria for all 11 Phase 1 deliverables |
 | [README.md](README.md) | Architecture overview, deployment guide, API endpoints |
+| [LOGBOOK.md](LOGBOOK.md) | Chronological development log -- sessions, deployments, decisions |
 
 ### Document Reading Order & Dependencies
 
